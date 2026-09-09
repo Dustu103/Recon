@@ -35,15 +35,27 @@ function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function extractKeywords(text: string, dictionary: string[]): string[] {
+// Keywords that collide with common English lowercase words and must be matched case-sensitively
+const CASE_SENSITIVE_KEYWORDS = new Set(['Go', 'Rust']);
+
+export function extractKeywords(text: string, dictionary: string[]): string[] {
   const lowerText = text.toLowerCase();
   const matched = new Set<string>();
 
   for (const kw of dictionary) {
-    const escaped = escapeRegex(kw.toLowerCase());
-    const regex = new RegExp(`(?:^|[^a-z0-9])${escaped}(?:$|[^a-z0-9])`, 'i');
-    if (regex.test(lowerText)) {
-      matched.add(kw);
+    if (CASE_SENSITIVE_KEYWORDS.has(kw)) {
+      // Require case-sensitive boundary match on original text
+      const escaped = escapeRegex(kw);
+      const regex = new RegExp(`\\b${escaped}\\b`);
+      if (regex.test(text)) {
+        matched.add(kw);
+      }
+    } else {
+      const escaped = escapeRegex(kw.toLowerCase());
+      const regex = new RegExp(`(?:^|[^a-z0-9])${escaped}(?:$|[^a-z0-9])`, 'i');
+      if (regex.test(lowerText)) {
+        matched.add(kw);
+      }
     }
   }
 
@@ -290,6 +302,13 @@ export async function crawlCompany(
   clearTimeout(globalTimeoutId);
 
   // 5. Aggregate Text and Extract Culture and Tech Keywords
+  const totalWords = pages.reduce((sum, p) => sum + p.wordCount, 0);
+  if (pages.length > 0 && totalWords < 50) {
+    warnings.push(
+      `Crawled pages contain minimal text (${totalWords} words), likely a client-side rendered SPA without SSR. Relying primarily on Job Description.`
+    );
+  }
+
   const fullText = pages.map((p) => `${p.title} ${p.headings.join(' ')} ${p.cleanText}`).join('\n\n');
   const cultureKeywords = extractKeywords(fullText, CULTURE_KEYWORDS);
   const engineeringTechStack = extractKeywords(fullText, TECH_KEYWORDS);

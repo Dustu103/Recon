@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import http from 'node:http';
-import { crawlCompany } from '../../research-orchestrator';
+import { crawlCompany, extractKeywords } from '../../research-orchestrator';
 import { MockDiscussionRetriever } from '../../discussion-retriever';
 
 describe('research-orchestrator (Integration)', () => {
@@ -163,5 +163,45 @@ describe('research-orchestrator (Integration)', () => {
     expect(result.pages.length).toBe(0);
     expect(result.warnings[0]).toContain('Invalid company URL');
     expect(result.insightsIncluded).toBe(false);
+  });
+
+  it('correctly handles Go keyword avoiding English verb false positives', () => {
+    const techDict = ['Go', 'Golang', 'TypeScript', 'React', 'C++'];
+
+    // Common English verb "go" should NOT trigger tech keyword "Go"
+    const marketingText = 'We go above and beyond for every customer and always go the extra mile.';
+    const marketingMatches = extractKeywords(marketingText, techDict);
+    expect(marketingMatches).not.toContain('Go');
+
+    // Capitalized "Go" in engineering context SHOULD trigger "Go"
+    const engText = 'Our backend microservices are built with Go and TypeScript.';
+    const engMatches = extractKeywords(engText, techDict);
+    expect(engMatches).toContain('Go');
+    expect(engMatches).toContain('TypeScript');
+
+    // Golang should match
+    const golangText = 'Looking for senior Golang developers.';
+    const golangMatches = extractKeywords(golangText, techDict);
+    expect(golangMatches).toContain('Golang');
+  });
+
+  it('warns when crawled pages contain minimal text (e.g. client-side rendered SPA without SSR)', async () => {
+    server = http.createServer((req, res) => {
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      // Shell page with only a script tag and empty root
+      res.end('<!DOCTYPE html><html><head><title>SPA</title></head><body><div id="root"></div></body></html>');
+    });
+
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+    const port = (server.address() as any).port;
+    baseUrl = `http://127.0.0.1:${port}`;
+
+    const result = await crawlCompany(baseUrl, {
+      allowLocalhost: true,
+      politeDelayMs: 0,
+    });
+
+    expect(result.pages.length).toBe(1);
+    expect(result.warnings.some((w) => w.includes('client-side rendered SPA'))).toBe(true);
   });
 });

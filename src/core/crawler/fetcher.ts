@@ -42,10 +42,47 @@ export function clearDnsCache(): void {
   dnsCache.clear();
 }
 
+const MAX_CACHE_ENTRIES = 500;
+
+/**
+ * Bounded DNS cache to prevent daemon memory leaks across thousands of crawls.
+ */
+export function setDnsCache(hostname: string, data: CachedDns): void {
+  if (dnsCache.size >= MAX_CACHE_ENTRIES) {
+    const now = Date.now();
+    for (const [key, val] of dnsCache) {
+      if (val.expiresAt < now) {
+        dnsCache.delete(key);
+      }
+    }
+    if (dnsCache.size >= MAX_CACHE_ENTRIES) {
+      const oldestKey = dnsCache.keys().next().value;
+      if (oldestKey) dnsCache.delete(oldestKey);
+    }
+  }
+  dnsCache.set(hostname, data);
+}
+
 /**
  * Tracking last request timestamps per origin for polite request spacing.
  */
 const lastRequestByOrigin = new Map<string, number>();
+
+function recordOriginAccess(origin: string): void {
+  if (lastRequestByOrigin.size >= MAX_CACHE_ENTRIES) {
+    const now = Date.now();
+    for (const [key, timestamp] of lastRequestByOrigin) {
+      if (now - timestamp > 60_000) {
+        lastRequestByOrigin.delete(key);
+      }
+    }
+    if (lastRequestByOrigin.size >= MAX_CACHE_ENTRIES) {
+      const oldestKey = lastRequestByOrigin.keys().next().value;
+      if (oldestKey) lastRequestByOrigin.delete(oldestKey);
+    }
+  }
+  lastRequestByOrigin.set(origin, Date.now());
+}
 
 /**
  * Per-origin active request concurrency tracker (capped at 2).
@@ -66,7 +103,7 @@ async function acquireOriginSlot(origin: string, politeDelayMs: number): Promise
   }
 
   activeRequestsByOrigin.set(origin, (activeRequestsByOrigin.get(origin) || 0) + 1);
-  lastRequestByOrigin.set(origin, Date.now());
+  recordOriginAccess(origin);
 }
 
 function releaseOriginSlot(origin: string): void {
@@ -124,12 +161,13 @@ export function createPinnedAgent(options?: { allowLocalhost?: boolean }): Agent
             }
           }
 
-          const selected = [
-            { address: addresses[0].address, family: addresses[0].family },
-          ];
+          const selected = addresses.map((a) => ({
+            address: a.address,
+            family: a.family,
+          }));
 
-          // Cache for 10 seconds
-          dnsCache.set(hostname, {
+          // Cache for 10 seconds with bounded capacity
+          setDnsCache(hostname, {
             addresses: selected,
             expiresAt: Date.now() + 10_000,
           });
