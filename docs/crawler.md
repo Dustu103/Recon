@@ -56,12 +56,12 @@ A naive SSRF check resolves hostname via `dns.lookup()`, verifies the IP against
 Recon eliminates the Time-Of-Check to Time-Of-Use (TOCTOU) window by overriding Undici's TCP/TLS connection resolver via `buildConnector({ lookup })`:
 1. `lookup` resolves all A and AAAA records via `dns.promises.lookup(hostname, { all: true })`.
 2. **Every returned address is validated** against the CIDR blocklist. If ANY IP is restricted, the connection is rejected immediately.
-3. The socket connector pins directly to the first validated IP address:
+3. The socket connector passes all verified public addresses to Undici:
    ```ts
-   cb(null, [{ address: addresses[0].address, family: addresses[0].family }]);
+   cb(null, addresses.map(a => ({ address: a.address, family: a.family })));
    ```
-4. Undici connects the TCP/TLS socket directly to the pinned IP while preserving TLS SNI (`opts.servername`) and the HTTP `Host` header for the target domain. **Zero secondary DNS lookups occur.**
-5. In-process 10-second DNS cache avoids redundant resolver overhead across multi-page crawls to the same domain.
+4. Undici connects the TCP/TLS socket directly to the validated IP pool, preserving multi-A record round-robin failover while maintaining TLS SNI (`opts.servername`) and the HTTP `Host` header for the target domain. **Zero secondary DNS lookups occur.**
+5. In-process bounded DNS cache (max 500 entries, 10-second TTL) avoids redundant resolver overhead across multi-page crawls while preventing memory leaks in 24/7 server environments.
 
 ### CIDR Blocklist
 - **IPv4**: `0.0.0.0/8`, `10.0.0.0/8`, `100.64.0.0/10` (CGNAT), `127.0.0.0/8` (Loopback), `169.254.0.0/16` (Link-local), `172.16.0.0/12`, `192.0.0.0/24`, `192.0.2.0/24`, `192.88.99.0/24`, `192.168.0.0/16`, `198.18.0.0/15`, `198.51.100.0/24`, `203.0.113.0/24`, `224.0.0.0/4`, `240.0.0.0/4`, `255.255.255.255/32`.
