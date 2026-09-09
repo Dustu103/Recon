@@ -1,0 +1,40 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "lib": [
+      "ES2022"
+    ],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "baseUrl": ".",
+    "paths": {
+      "@/shared": ["src/shared/index.ts"],
+      "@/shared/*": ["src/shared/*"],
+      "@/core": ["src/core/index.ts"],
+      "@/core/*": ["src/core/*"],
+      "@/api/*": ["src/api/*"],
+      "@/cli/*": ["src/cli/*"],
+      "@taro/shared": ["src/shared/index.ts"],
+      "@taro/shared/*": ["src/shared/*"],
+      "@taro/core": ["src/core/index.ts"],
+      "@taro/core/*": ["src/core/*"]
+    }
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "apps/web",
+    "src/**/__tests__/**"
+  ]
+}
