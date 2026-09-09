@@ -78,8 +78,8 @@ function DashboardContent() {
           </div>
           <h3 className="text-lg font-semibold text-white">No interview kits generated yet</h3>
           <p className="text-sm text-slate-400 leading-relaxed">
-            Provide a target job description and company URL. Taro will extract requirements,
-            analyze the company context, and assemble tailored question rubrics.
+            Provide a target job description and company URL. Recon will extract requirements,
+            cross-reference company engineering culture, and build a tailored question rubric.
           </p>
           <div className="pt-2">
             <Link

@@ -22,7 +22,7 @@ export function Navbar() {
           <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
             <Sparkles className="w-4 h-4" />
           </div>
-          <span>Taro</span>
+          <span>Recon</span>
           <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-normal">
             AI Prep
           </span>

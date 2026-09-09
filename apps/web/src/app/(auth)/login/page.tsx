@@ -58,7 +58,7 @@ export default function LoginPage() {
             <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shadow-sm shadow-emerald-500/20">
               <Sparkles className="w-5 h-5" />
             </div>
-            <span>Taro</span>
+            <span>Recon</span>
           </Link>
           <h2 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
             Welcome back
