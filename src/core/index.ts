@@ -1,9 +1,21 @@
 /**
  * @taro/core — Public API
- *
- * This barrel will be populated as each domain (D2–D5) is implemented.
- * Do not import sub-modules directly from outside this package.
  */
 
-// Populated in D5.4:
-// export { generateKit } from './pipeline/orchestrator';
+// Crawler & Research Subsystem (Domain 2)
+export * from './crawler/types';
+export { crawlCompany } from './crawler/research-orchestrator';
+export { validateUrl, isPrivateOrRestrictedIp, isLocalhostAllowed } from './crawler/url-validator';
+export { safeFetch, clearDnsCache, createPinnedAgent } from './crawler/fetcher';
+export type { SafeFetchResult, SafeFetchOptions } from './crawler/fetcher';
+export { cleanHtml } from './crawler/cleaner';
+export type { CleanedPage } from './crawler/cleaner';
+export { checkRobots, parseRobotsTxt, isPathAllowed } from './crawler/robots-checker';
+export type { RobotsCheckResult } from './crawler/robots-checker';
+export { rankLinks, isInternalLink, KEYWORD_WEIGHTS } from './crawler/link-ranker';
+export type { RankedLink } from './crawler/link-ranker';
+export {
+  MockDiscussionRetriever,
+  DomainInsightsRetriever,
+  getDefaultDiscussionRetriever,
+} from './crawler/discussion-retriever';

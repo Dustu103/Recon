@@ -22,6 +22,7 @@ export function getHttpStatusForErrorCode(code: ErrorCode): number {
       return 429;
 
     case ErrorCode.INVALID_INPUT:
+    case ErrorCode.INVALID_URL:
     case ErrorCode.JD_TOO_SHORT:
     case ErrorCode.BATCH_SIZE_EXCEEDED:
     case ErrorCode.KIT_SCHEMA_INVALID:

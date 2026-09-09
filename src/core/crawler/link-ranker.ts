@@ -12,14 +12,17 @@ export const KEYWORD_WEIGHTS: Record<string, number> = {
   careers: 10,
   jobs: 10,
   hiring: 10,
+  interview: 10,
   handbook: 9,
   engineering: 8,
   tech: 7,
   culture: 7,
   about: 6,
+  process: 6,
   team: 5,
   values: 5,
   life: 5,
+  company: 4,
   blog: 3,
 };
 
