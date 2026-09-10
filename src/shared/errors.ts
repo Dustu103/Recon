@@ -40,6 +40,8 @@ export const ErrorCode = Object.freeze({
 
   // ── Concurrency & State (D5/D6) ───────────────────────────────────────────
   GENERATION_IN_PROGRESS: 'GENERATION_IN_PROGRESS',
+  CONCURRENT_MODIFICATION: 'CONCURRENT_MODIFICATION',
+  CONFIRMATION_REQUIRED: 'CONFIRMATION_REQUIRED',
 } as const);
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

@@ -31,6 +31,8 @@ describe('ErrorCode', () => {
     expect(codes).toContain('UNAUTHORIZED_KIT_ACCESS');
     expect(codes).toContain('BATCH_SIZE_EXCEEDED');
     expect(codes).toContain('GENERATION_IN_PROGRESS');
+    expect(codes).toContain('CONCURRENT_MODIFICATION');
+    expect(codes).toContain('CONFIRMATION_REQUIRED');
   });
 
   it('has no duplicate values', () => {

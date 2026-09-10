@@ -6,7 +6,11 @@ import { ErrorCode } from '@/shared';
 export function getHttpStatusForErrorCode(code: ErrorCode): number {
   switch (code) {
     case ErrorCode.USER_EXISTS:
+    case ErrorCode.CONCURRENT_MODIFICATION:
       return 409;
+
+    case ErrorCode.CONFIRMATION_REQUIRED:
+      return 428;
 
     case ErrorCode.INVALID_CREDENTIALS:
     case ErrorCode.UNAUTHORIZED:

@@ -7,7 +7,12 @@ import { getUserKitById } from '../services/kit-scoping';
 import { generateKit } from '@/core';
 import { TaroError, ErrorCode } from '@/shared';
 
+import { kitBuilderRouter } from './kit-builder.routes';
+
 export const kitRouter = Router();
+
+// Mount Domain 6 Builder routes (inline editing, additions, section regeneration, candidate progress)
+kitRouter.use(kitBuilderRouter);
 
 /**
  * POST /api/kits/generate

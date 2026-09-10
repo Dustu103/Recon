@@ -59,3 +59,17 @@ export type { GenerateKitParams } from './pipeline/kit-orchestrator';
 
 // Deterministic Logic Subsystem (Domain 4)
 export * from './deterministic';
+
+// Builder & Regeneration Subsystem (Domain 6)
+export {
+  regenerateQuestionsCategory,
+  regenerateCompanyBrief,
+  regenerateFlashcards,
+  cleanKitForExport,
+} from './builder/regeneration-engine';
+export type {
+  RegenerationOptions,
+  RegenerateQuestionsResult,
+  RegenerateBriefResult,
+  RegenerateFlashcardsResult,
+} from './builder/regeneration-engine';

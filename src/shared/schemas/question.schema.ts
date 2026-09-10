@@ -11,6 +11,10 @@ export const QuestionSchema = z.object({
   answer_outline: z.string().min(1),
   /** 1 = easy, 2 = medium, 3 = hard. Exact integer — no floats. */
   difficulty: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  /** Optional metadata: true if customized via inline editor */
+  _edited: z.boolean().optional(),
+  /** Optional metadata: true if hand-crafted via manual question creation */
+  _manual: z.boolean().optional(),
 });
 
 export type Question = z.infer<typeof QuestionSchema>;

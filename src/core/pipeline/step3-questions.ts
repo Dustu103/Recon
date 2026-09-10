@@ -115,13 +115,85 @@ CRITICAL RULES:
   return { systemPrompt, userPrompt };
 }
 
-export async function generateQuestionsForRequirements(
+export async function generateQuestionsForCategory(
+  category: QuestionCategory,
   targetRequirements: Requirement[],
   brief: CompanyBrief,
   options: Step3QuestionsOptions = {}
 ): Promise<Step3QuestionsResult> {
   const degradations: string[] = [...(options.degradations || [])];
   const client = options.client || getDefaultLlmClient({ mock: options.mock });
+  let nextQIndex = options.nextQuestionIndex ?? 1;
+
+  if (targetRequirements.length === 0) {
+    return { questions: [], nextQuestionIndex: nextQIndex, degradations };
+  }
+
+  const validIdSet = new Set(targetRequirements.map((r) => r.id));
+  const generatedQuestions: Question[] = [];
+
+  if (options.onProgress) {
+    options.onProgress({
+      step: 'questions',
+      percent: 45,
+      message: `Generating ${category} interview questions and rubrics...`,
+    });
+  }
+
+  try {
+    const { systemPrompt, userPrompt } = buildCategoryPrompt(category, targetRequirements, brief);
+    const response = await client.complete(userPrompt, {
+      systemPrompt,
+      jsonMode: true,
+      temperature: 0.2,
+    });
+
+    const parsed = parseAndValidateJson(response.content, RawQuestionsArraySchema, `Step 3 (${category})`);
+
+    for (const q of parsed.questions) {
+      // Referential Integrity Sanitization (Anti-False-Coverage Guarantee)
+      const sanitizedIds = q.requirement_ids.filter((id) => validIdSet.has(id));
+
+      if (sanitizedIds.length === 0) {
+        degradations.push(`Dropped orphan ${category} question lacking valid requirement mapping`);
+        continue;
+      }
+
+      const questionId = genQIds(1, nextQIndex - 1)[0];
+      nextQIndex++;
+
+      const question: Question = {
+        id: questionId,
+        requirement_ids: sanitizedIds,
+        category,
+        prompt: q.prompt.trim(),
+        answer_outline: q.answer_outline.trim(),
+        difficulty: (q.difficulty === 1 || q.difficulty === 2 || q.difficulty === 3 ? q.difficulty : 2),
+      };
+
+      QuestionSchema.parse(question);
+      generatedQuestions.push(question);
+    }
+  } catch (err) {
+    // Category Failure Isolation (Invariant 6): preserve other categories, record degradation
+    const msg = `Failed to generate ${category} questions: ${(err as Error).message}`;
+    console.warn(`[Pipeline] ${msg}`);
+    degradations.push(msg);
+  }
+
+  return {
+    questions: generatedQuestions,
+    nextQuestionIndex: nextQIndex,
+    degradations,
+  };
+}
+
+export async function generateQuestionsForRequirements(
+  targetRequirements: Requirement[],
+  brief: CompanyBrief,
+  options: Step3QuestionsOptions = {}
+): Promise<Step3QuestionsResult> {
+  const degradations: string[] = [...(options.degradations || [])];
   let nextQIndex = options.nextQuestionIndex ?? 1;
 
   if (targetRequirements.length === 0) {
@@ -156,58 +228,17 @@ export async function generateQuestionsForRequirements(
   }
 
   const allGeneratedQuestions: Question[] = [];
-  const validIdSet = new Set(targetRequirements.map((r) => r.id));
 
   for (const { category, reqs } of activeCategories) {
-    if (options.onProgress) {
-      options.onProgress({
-        step: 'questions',
-        percent: 45,
-        message: `Generating ${category} interview questions and rubrics...`,
-      });
-    }
+    const catResult = await generateQuestionsForCategory(category, reqs, brief, {
+      ...options,
+      nextQuestionIndex: nextQIndex,
+      degradations,
+    });
 
-    try {
-      const { systemPrompt, userPrompt } = buildCategoryPrompt(category, reqs, brief);
-      const response = await client.complete(userPrompt, {
-        systemPrompt,
-        jsonMode: true,
-        temperature: 0.2,
-      });
-
-      const parsed = parseAndValidateJson(response.content, RawQuestionsArraySchema, `Step 3 (${category})`);
-
-      for (const q of parsed.questions) {
-        // Referential Integrity Sanitization (Anti-False-Coverage Guarantee)
-        const sanitizedIds = q.requirement_ids.filter((id) => validIdSet.has(id));
-
-        if (sanitizedIds.length === 0) {
-          // Drop orphan question outright to prevent false coverage
-          degradations.push(`Dropped orphan ${category} question lacking valid requirement mapping`);
-          continue;
-        }
-
-        const questionId = genQIds(1, nextQIndex - 1)[0];
-        nextQIndex++;
-
-        const question: Question = {
-          id: questionId,
-          requirement_ids: sanitizedIds,
-          category,
-          prompt: q.prompt.trim(),
-          answer_outline: q.answer_outline.trim(),
-          difficulty: (q.difficulty === 1 || q.difficulty === 2 || q.difficulty === 3 ? q.difficulty : 2),
-        };
-
-        QuestionSchema.parse(question);
-        allGeneratedQuestions.push(question);
-      }
-    } catch (err) {
-      // Category Failure Isolation (Invariant 6): preserve other categories, record degradation
-      const msg = `Failed to generate ${category} questions: ${(err as Error).message}`;
-      console.warn(`[Pipeline] ${msg}`);
-      degradations.push(msg);
-    }
+    allGeneratedQuestions.push(...catResult.questions);
+    nextQIndex = catResult.nextQuestionIndex;
+    degradations.push(...catResult.degradations.filter((d) => !degradations.includes(d)));
   }
 
   return {

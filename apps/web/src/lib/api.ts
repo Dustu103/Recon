@@ -197,6 +197,13 @@ export interface KitDetail {
   kit: any;
   status: KitStatus;
   checkpoints?: any;
+  progress?: {
+    notes?: Record<string, string>;
+    starred?: string[];
+    flashcardMastery?: Record<string, boolean>;
+    completedDays?: number[];
+  };
+  __v?: number;
   error?: any;
   createdAt: string;
   updatedAt: string;

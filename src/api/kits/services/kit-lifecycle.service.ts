@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import mongoose from 'mongoose';
-import { TaroError, ErrorCode } from '@/shared';
+import { TaroError, ErrorCode, nextOffsetFromIds } from '@/shared';
 import { Kit } from '@taro/shared';
 import { generateKit } from '@/core';
 import { KitModel, IKit, KitStatus, IKitCheckpoints, IKitError } from '../models/kit.model';
@@ -278,6 +278,9 @@ export class KitLifecycleService {
       scheduleDays: kit.schedule?.days_available || 7,
     };
 
+    const nextQuestionIndex = nextOffsetFromIds('q', (kit.questions || []).map((q) => q.id)) + 1;
+    const nextFlashcardIndex = nextOffsetFromIds('f', (kit.flashcards || []).map((f) => f.id)) + 1;
+
     await KitModel.findOneAndUpdate(
       { _id: new mongoose.Types.ObjectId(kitId) },
       {
@@ -287,6 +290,8 @@ export class KitLifecycleService {
           companyUrl: kit.source.company_url,
           roleTitle: kit.role.title,
           kit,
+          nextQuestionIndex,
+          nextFlashcardIndex,
           status: 'completed',
           checkpoints,
           updatedAt: new Date(),

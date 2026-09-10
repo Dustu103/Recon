@@ -7,6 +7,10 @@ export const FlashcardSchema = z.object({
   front: z.string().min(1),
   back: z.string().min(1),
   requirement_ids: z.array(z.string().regex(/^r\d+$/)),
+  /** Optional metadata: true if customized via inline editor */
+  _edited: z.boolean().optional(),
+  /** Optional metadata: true if hand-crafted via manual creation */
+  _manual: z.boolean().optional(),
 });
 
 export type Flashcard = z.infer<typeof FlashcardSchema>;

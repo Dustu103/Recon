@@ -36,4 +36,5 @@ coverage/
 
 # Scratch & Temporary files
 scratch/
+*.tsbuildinfo
 

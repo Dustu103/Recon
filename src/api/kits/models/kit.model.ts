@@ -54,6 +54,16 @@ export interface IKit extends Document {
   status: KitStatus;
   checkpoints?: IKitCheckpoints;
   error?: IKitError | string | null;
+  nextQuestionIndex?: number;
+  nextFlashcardIndex?: number;
+  regenerationLock?: { section: string; category?: string; lockedAt: Date; expiresAt: Date } | null;
+  progress?: {
+    notes?: Record<string, string>;
+    starred?: string[];
+    flashcardMastery?: Record<string, string>;
+    completedDays?: number[];
+  };
+  __v?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -124,10 +134,26 @@ const kitSchema = new Schema<IKit>(
       type: Schema.Types.Mixed,
       default: null,
     },
+    nextQuestionIndex: {
+      type: Number,
+      default: 1,
+    },
+    nextFlashcardIndex: {
+      type: Number,
+      default: 1,
+    },
+    regenerationLock: {
+      type: Schema.Types.Mixed,
+      default: null,
+    },
+    progress: {
+      type: Schema.Types.Mixed,
+      default: () => ({ notes: {}, starred: [], flashcardMastery: {}, completedDays: [] }),
+    },
   },
   {
     timestamps: true,
-    versionKey: false,
+    versionKey: '__v',
   }
 );
 
