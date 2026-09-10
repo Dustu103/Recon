@@ -1,4 +1,5 @@
 import dns from 'node:dns';
+import zlib from 'node:zlib';
 import { Agent, buildConnector } from 'undici';
 import { ErrorCode, TaroError } from '@/shared';
 import { validateUrl, isPrivateOrRestrictedIp, isLocalhostAllowed } from './url-validator';
@@ -20,6 +21,7 @@ export interface SafeFetchOptions {
   allowLocalhost?: boolean;
   signal?: AbortSignal;
   customAgent?: Agent;
+  allowedContentTypes?: string[];
 }
 
 const DEFAULT_TIMEOUT_MS = 6000;
@@ -242,6 +244,7 @@ export async function safeFetch(
             'ReconBot/1.0 (+https://github.com/Dustu103/Recon; InterviewPrepResearch)',
           accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.1',
           'accept-language': 'en-US,en;q=0.9',
+          'accept-encoding': 'gzip, deflate, br',
         },
         signal: abortController.signal,
       });
@@ -304,20 +307,21 @@ export async function safeFetch(
         );
       }
 
-      // Section 11: Restrict handling to expected content types (text/html or application/xhtml+xml)
+      // Content-Type validation: defaults to text/html or application/xhtml+xml unless custom allowedContentTypes provided (e.g. text/plain for robots.txt)
       const rawContentType = response.headers['content-type'];
-      const contentType = Array.isArray(rawContentType)
-        ? rawContentType[0]
-        : rawContentType || '';
+      const contentType = (
+        Array.isArray(rawContentType) ? rawContentType[0] : rawContentType || ''
+      ).toLowerCase();
 
-      if (
-        !contentType.toLowerCase().includes('text/html') &&
-        !contentType.toLowerCase().includes('application/xhtml+xml')
-      ) {
+      const defaultAllowed = ['text/html', 'application/xhtml+xml'];
+      const allowed = options.allowedContentTypes ?? defaultAllowed;
+      const isAllowed = allowed.some((type) => contentType.includes(type.toLowerCase()));
+
+      if (!isAllowed) {
         await response.body.dump();
         throw new TaroError(
           ErrorCode.INVALID_INPUT,
-          `Unsupported Content-Type: ${contentType}. Expected text/html.`
+          `Unsupported Content-Type: ${contentType}. Expected one of: ${allowed.join(', ')}.`
         );
       }
 
@@ -354,7 +358,42 @@ export async function safeFetch(
         chunks.push(buf);
       }
 
-      const html = Buffer.concat(chunks).toString('utf-8');
+      const rawBuffer = Buffer.concat(chunks);
+      const rawContentEncoding = response.headers['content-encoding'];
+      const contentEncoding = (
+        Array.isArray(rawContentEncoding) ? rawContentEncoding[0] : rawContentEncoding || ''
+      ).toLowerCase().trim();
+
+      let decompressedBuffer = rawBuffer;
+      try {
+        if (
+          contentEncoding === 'gzip' ||
+          (!contentEncoding && rawBuffer.length >= 2 && rawBuffer[0] === 0x1f && rawBuffer[1] === 0x8b)
+        ) {
+          decompressedBuffer = zlib.gunzipSync(rawBuffer);
+        } else if (contentEncoding === 'deflate') {
+          try {
+            decompressedBuffer = zlib.inflateSync(rawBuffer);
+          } catch {
+            decompressedBuffer = zlib.inflateRawSync(rawBuffer);
+          }
+        } else if (contentEncoding === 'br') {
+          decompressedBuffer = zlib.brotliDecompressSync(rawBuffer);
+        } else if (rawBuffer.length >= 2 && rawBuffer[0] === 0x1f && rawBuffer[1] === 0x8b) {
+          decompressedBuffer = zlib.gunzipSync(rawBuffer);
+        }
+      } catch {
+        decompressedBuffer = rawBuffer;
+      }
+
+      if (decompressedBuffer.length > maxBytes) {
+        throw new TaroError(
+          ErrorCode.RESPONSE_TOO_LARGE,
+          `Decompressed response body (${decompressedBuffer.length} bytes) exceeded maximum allowed size of ${maxBytes} bytes`
+        );
+      }
+
+      const html = decompressedBuffer.toString('utf-8');
 
       // Convert undici headers to simple Record<string, string>
       const headersRecord: Record<string, string> = {};

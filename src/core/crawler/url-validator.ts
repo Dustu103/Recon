@@ -69,6 +69,44 @@ const RESTRICTED_HOSTNAMES = new Set([
 ]);
 
 /**
+ * Parses an IPv6 string into an 8-element array of 16-bit integers,
+ * handling double colons, hex representation, and trailing dotted-decimal IPv4.
+ */
+function parseIpv6Words(ip: string): number[] | null {
+  let clean = ip.toLowerCase().trim();
+  if (clean.includes('%')) clean = clean.split('%')[0];
+
+  const lastColon = clean.lastIndexOf(':');
+  if (lastColon === -1) return null;
+  const tail = clean.slice(lastColon + 1);
+  if (tail.includes('.')) {
+    const parts = tail.split('.').map(Number);
+    if (parts.length !== 4 || parts.some((p) => isNaN(p) || p < 0 || p > 255)) {
+      return null;
+    }
+    const hex1 = ((parts[0] << 8) | parts[1]).toString(16);
+    const hex2 = ((parts[2] << 8) | parts[3]).toString(16);
+    clean = clean.slice(0, lastColon) + ':' + hex1 + ':' + hex2;
+  }
+
+  const split = clean.split('::');
+  if (split.length > 2) return null;
+
+  const left = split[0] ? split[0].split(':').filter(Boolean) : [];
+  const right = split.length === 2 && split[1] ? split[1].split(':').filter(Boolean) : [];
+
+  const missing = 8 - (left.length + right.length);
+  if (missing < 0) return null;
+
+  const middle = new Array(missing).fill('0');
+  const words = [...left, ...middle, ...right].map((w) => parseInt(w || '0', 16));
+  if (words.length !== 8 || words.some((w) => isNaN(w) || w < 0 || w > 0xffff)) {
+    return null;
+  }
+  return words;
+}
+
+/**
  * Checks whether an IP address (v4 or v6) is private, loopback, or reserved.
  */
 export function isPrivateOrRestrictedIp(
@@ -77,16 +115,8 @@ export function isPrivateOrRestrictedIp(
 ): boolean {
   const allowLoopback = isLocalhostAllowed(options?.allowLocalhost);
 
-  // Normalize IPv6 representation
+  // Normalize IP representation
   const cleanIp = ip.toLowerCase().trim();
-
-  // Check for IPv4-mapped IPv6 (e.g., ::ffff:192.168.1.1 or ::ffff:c0a8:0101)
-  if (cleanIp.startsWith('::ffff:')) {
-    const rest = cleanIp.slice(7);
-    if (net.isIPv4(rest)) {
-      return isPrivateOrRestrictedIp(rest, options);
-    }
-  }
 
   // Handle IPv4
   if (net.isIPv4(cleanIp)) {
@@ -105,45 +135,73 @@ export function isPrivateOrRestrictedIp(
     return false;
   }
 
-  // Handle IPv6
+  // Handle IPv6 (including IPv4-mapped and IPv4-compatible)
   if (net.isIPv6(cleanIp)) {
-    // Loopback ::1
-    if (cleanIp === '::1' || cleanIp === '0000:0000:0000:0000:0000:0000:0000:0001') {
+    const words = parseIpv6Words(cleanIp);
+    if (!words) {
+      return true; // Malformed IPv6 -> reject conservatively
+    }
+
+    // 1. IPv4-mapped (::ffff:0:0/96) or IPv4-compatible (::0:0/96)
+    const isIpv4Mapped =
+      words[0] === 0 &&
+      words[1] === 0 &&
+      words[2] === 0 &&
+      words[3] === 0 &&
+      words[4] === 0 &&
+      (words[5] === 0xffff || words[5] === 0);
+
+    if (isIpv4Mapped) {
+      // Reconstruct embedded IPv4 in dotted decimal
+      const octet1 = (words[6] >> 8) & 0xff;
+      const octet2 = words[6] & 0xff;
+      const octet3 = (words[7] >> 8) & 0xff;
+      const octet4 = words[7] & 0xff;
+      const embeddedIpv4 = `${octet1}.${octet2}.${octet3}.${octet4}`;
+      return isPrivateOrRestrictedIp(embeddedIpv4, options);
+    }
+
+    // 2. Loopback (::1)
+    if (
+      words[0] === 0 &&
+      words[1] === 0 &&
+      words[2] === 0 &&
+      words[3] === 0 &&
+      words[4] === 0 &&
+      words[5] === 0 &&
+      words[6] === 0 &&
+      words[7] === 1
+    ) {
       return !allowLoopback;
     }
 
-    // Unspecified ::
-    if (cleanIp === '::' || cleanIp === '0000:0000:0000:0000:0000:0000:0000:0000') {
+    // 3. Unspecified (::)
+    if (words.every((w) => w === 0)) {
       return true;
     }
 
-    // Unique Local Address (ULA) fc00::/7 (fc00:: to fdff::)
-    if (cleanIp.startsWith('fc') || cleanIp.startsWith('fd')) {
+    // 4. Unique Local Address (ULA fc00::/7)
+    if ((words[0] & 0xfe00) === 0xfc00) {
       return true;
     }
 
-    // Link-Local fe80::/10 (fe80:: to febf::)
-    if (
-      cleanIp.startsWith('fe8') ||
-      cleanIp.startsWith('fe9') ||
-      cleanIp.startsWith('fea') ||
-      cleanIp.startsWith('feb')
-    ) {
+    // 5. Link-Local (fe80::/10)
+    if ((words[0] & 0xffc0) === 0xfe80) {
       return true;
     }
 
-    // Multicast ff00::/8
-    if (cleanIp.startsWith('ff')) {
+    // 6. Multicast (ff00::/8)
+    if ((words[0] & 0xff00) === 0xff00) {
       return true;
     }
 
-    // Documentation 2001:db8::/32
-    if (cleanIp.startsWith('2001:db8:') || cleanIp.startsWith('2001:0db8:')) {
+    // 7. Documentation (2001:db8::/32)
+    if (words[0] === 0x2001 && words[1] === 0x0db8) {
       return true;
     }
 
-    // AWS IPv6 metadata endpoint fd00:ec2::254
-    if (cleanIp.startsWith('fd00:ec2:')) {
+    // 8. AWS IPv6 metadata endpoint (fd00:ec2::/32)
+    if (words[0] === 0xfd00 && words[1] === 0x0ec2) {
       return true;
     }
 

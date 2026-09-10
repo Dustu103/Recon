@@ -70,6 +70,33 @@ describe('robots-checker (RFC 9309)', () => {
       expect(result.warning).toContain('disallowed by robots.txt');
     });
 
+    it('successfully processes real-world robots.txt served with Content-Type: text/plain', async () => {
+      server = http.createServer((req, res) => {
+        if (req.url === '/robots.txt') {
+          res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+          res.end('User-agent: *\nDisallow: /private-jobs\n');
+        } else {
+          res.writeHead(200, { 'Content-Type': 'text/html' });
+          res.end('<html><body>Open</body></html>');
+        }
+      });
+
+      await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+      const port = (server.address() as any).port;
+
+      const disallowed = await checkRobots(`http://127.0.0.1:${port}/private-jobs/secret`, {
+        allowLocalhost: true,
+      });
+      expect(disallowed.isAllowed).toBe(false);
+      expect(disallowed.status).toBe('disallowed');
+
+      const allowed = await checkRobots(`http://127.0.0.1:${port}/careers`, {
+        allowLocalhost: true,
+      });
+      expect(allowed.isAllowed).toBe(true);
+      expect(allowed.status).toBe('allowed');
+    });
+
     it('fails-open on 404 Not Found per RFC 9309 §2.3.1.2', async () => {
       server = http.createServer((req, res) => {
         res.writeHead(404);

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import http from 'node:http';
+import zlib from 'node:zlib';
 import { safeFetch, clearDnsCache, createPinnedAgent, setDnsCache } from '../../fetcher';
 import { ErrorCode, TaroError } from '@/shared';
 
@@ -40,6 +41,57 @@ describe('fetcher & socket pinning', () => {
     expect(result.html).toContain('<h1>Recon Engineering</h1>');
     expect(result.headers['x-custom-header']).toBe('ReconTest');
     expect(result.finalUrl).toBe(`${baseUrl}/about`);
+  });
+
+  it('automatically decompresses gzip compressed HTML responses', async () => {
+    const rawHtml = '<!DOCTYPE html><html><head><title>Gzip Amazon Test</title></head><body>Compressed Content</body></html>';
+    const compressed = zlib.gzipSync(Buffer.from(rawHtml));
+
+    server = http.createServer((req, res) => {
+      res.writeHead(200, {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Content-Encoding': 'gzip',
+      });
+      res.end(compressed);
+    });
+
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+    port = (server.address() as any).port;
+    baseUrl = `http://127.0.0.1:${port}`;
+
+    const result = await safeFetch(`${baseUrl}/gzip-page`, {
+      allowLocalhost: true,
+      politeDelayMs: 0,
+    });
+
+    expect(result.statusCode).toBe(200);
+    expect(result.html).toBe(rawHtml);
+    expect(result.html).toContain('Compressed Content');
+  });
+
+  it('automatically decompresses brotli and deflate compressed responses', async () => {
+    const rawHtml = '<!DOCTYPE html><html><head><title>Brotli Test</title></head><body>Brotli Body</body></html>';
+    const compressedBr = zlib.brotliCompressSync(Buffer.from(rawHtml));
+
+    server = http.createServer((req, res) => {
+      res.writeHead(200, {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Content-Encoding': 'br',
+      });
+      res.end(compressedBr);
+    });
+
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+    port = (server.address() as any).port;
+    baseUrl = `http://127.0.0.1:${port}`;
+
+    const result = await safeFetch(`${baseUrl}/brotli-page`, {
+      allowLocalhost: true,
+      politeDelayMs: 0,
+    });
+
+    expect(result.statusCode).toBe(200);
+    expect(result.html).toBe(rawHtml);
   });
 
   it('rejects non-HTML content-type (e.g. application/pdf) with INVALID_INPUT', async () => {

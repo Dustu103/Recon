@@ -154,9 +154,13 @@ describe('url-validator', () => {
       }
     });
 
-    it('identifies IPv4-mapped IPv6 addresses accurately', () => {
+    it('identifies IPv4-mapped IPv6 addresses accurately (both dotted and hex format)', () => {
       expect(isPrivateOrRestrictedIp('::ffff:192.168.1.1', { allowLocalhost: false })).toBe(true);
       expect(isPrivateOrRestrictedIp('::ffff:8.8.8.8', { allowLocalhost: false })).toBe(false);
+      // Hex-encoded IPv4-mapped IPv6 (e.g. 127.0.0.1 -> 7f00:1, 10.0.0.1 -> a00:1)
+      expect(isPrivateOrRestrictedIp('::ffff:7f00:1', { allowLocalhost: false })).toBe(true);
+      expect(isPrivateOrRestrictedIp('::ffff:a00:1', { allowLocalhost: false })).toBe(true);
+      expect(isPrivateOrRestrictedIp('::ffff:808:808', { allowLocalhost: false })).toBe(false); // 8.8.8.8 in hex
     });
   });
 

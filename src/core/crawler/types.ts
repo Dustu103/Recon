@@ -7,6 +7,7 @@ export interface CrawledPage {
   title: string;
   metaDescription?: string;
   cleanText: string;
+  cleanMarkdown?: string;
   headings: string[];
   wordCount: number;
   depth: number;
@@ -49,6 +50,7 @@ export interface CrawlOptions {
   signal?: AbortSignal;
   allowLocalhost?: boolean;
   discussionRetriever?: DiscussionRetriever;
+  skipCache?: boolean;
 }
 
 export interface DiscussionRetriever {

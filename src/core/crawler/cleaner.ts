@@ -5,6 +5,7 @@ export interface CleanedPage {
   metaDescription?: string;
   headings: string[];
   cleanText: string;
+  cleanMarkdown?: string;
   wordCount: number;
 }
 
@@ -42,6 +43,13 @@ const NOISE_SELECTORS = [
   '.ad',
   '.social-share',
   '.menu-overlay',
+  '.shopping-cart',
+  '#nav-cart',
+  '#nav-tools',
+  '.deals-shoveler',
+  '.a-carousel',
+  '.product-grid',
+  '.product-ads',
   '[aria-hidden="true"]',
   '[hidden]',
 ];
@@ -55,6 +63,7 @@ export function cleanHtml(html: string, maxChars: number = DEFAULT_MAX_CHARS): C
       title: '',
       headings: [],
       cleanText: '',
+      cleanMarkdown: '',
       wordCount: 0,
     };
   }
@@ -146,6 +155,7 @@ export function cleanHtml(html: string, maxChars: number = DEFAULT_MAX_CHARS): C
     metaDescription,
     headings,
     cleanText,
+    cleanMarkdown: cleanText,
     wordCount,
   };
 }

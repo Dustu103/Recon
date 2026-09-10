@@ -111,6 +111,20 @@ export function isPathAllowed(pathname: string, groups: RuleGroup[], botName: st
   return true;
 }
 
+interface CachedRobots {
+  groups: RuleGroup[] | null;
+  status: 'allowed' | 'disallowed' | 'error';
+  warning?: string;
+  expiresAt: number;
+}
+
+const robotsCache = new Map<string, CachedRobots>();
+const ROBOTS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+export function clearRobotsCache(): void {
+  robotsCache.clear();
+}
+
 /**
  * Fetches and checks robots.txt compliance for a target URL.
  * Implements RFC 9309:
@@ -118,6 +132,7 @@ export function isPathAllowed(pathname: string, groups: RuleGroup[], botName: st
  * - 4xx: fail-open (allow)
  * - 5xx: fail-closed / conservative disallow per RFC 9309 Section 2.3.1.2
  * - Timeout / Unreachable: fail-open with structured warning
+ * - Caches parsed rules per origin to avoid redundant network requests across crawls
  */
 export async function checkRobots(
   targetUrl: string,
@@ -125,6 +140,7 @@ export async function checkRobots(
     allowLocalhost?: boolean;
     customAgent?: Agent;
     timeoutMs?: number;
+    skipCache?: boolean;
   }
 ): Promise<RobotsCheckResult> {
   let parsed: URL;
@@ -134,7 +150,29 @@ export async function checkRobots(
     return { isAllowed: false, status: 'disallowed', warning: `Invalid URL: ${targetUrl}` };
   }
 
-  const robotsUrl = `${parsed.origin}/robots.txt`;
+  const origin = parsed.origin;
+  const isLocal = origin.includes('localhost') || origin.includes('127.0.0.1');
+
+  // Check origin-level cache
+  if (!options?.skipCache && !isLocal) {
+    const cached = robotsCache.get(origin);
+    if (cached && Date.now() < cached.expiresAt) {
+      if (cached.status === 'disallowed') {
+        return { isAllowed: false, status: 'disallowed', warning: cached.warning };
+      }
+      if (cached.groups) {
+        const allowed = isPathAllowed(parsed.pathname, cached.groups);
+        return {
+          isAllowed: allowed,
+          status: allowed ? 'allowed' : 'disallowed',
+          warning: allowed ? undefined : `Path ${parsed.pathname} is disallowed by robots.txt`,
+        };
+      }
+      return { isAllowed: true, status: 'allowed' };
+    }
+  }
+
+  const robotsUrl = `${origin}/robots.txt`;
 
   try {
     const res = await safeFetch(robotsUrl, {
@@ -143,10 +181,18 @@ export async function checkRobots(
       politeDelayMs: 0,
       allowLocalhost: options?.allowLocalhost,
       customAgent: options?.customAgent,
+      allowedContentTypes: ['text/plain', 'text/html', 'text/tab-separated-values'],
     });
 
     if (res.statusCode === 200) {
       const groups = parseRobotsTxt(res.html);
+      if (!isLocal) {
+        robotsCache.set(origin, {
+          groups,
+          status: 'allowed',
+          expiresAt: Date.now() + ROBOTS_CACHE_TTL_MS,
+        });
+      }
       const allowed = isPathAllowed(parsed.pathname, groups);
       return {
         isAllowed: allowed,
@@ -156,6 +202,13 @@ export async function checkRobots(
     }
 
     // 4xx status (e.g. 404 Not Found): Fail-open per RFC 9309 §2.3.1.2
+    if (!isLocal) {
+      robotsCache.set(origin, {
+        groups: null,
+        status: 'allowed',
+        expiresAt: Date.now() + ROBOTS_CACHE_TTL_MS,
+      });
+    }
     return {
       isAllowed: true,
       status: 'allowed',
@@ -164,10 +217,19 @@ export async function checkRobots(
     // Check if server returned 5xx
     if (err instanceof TaroError && err.code === ErrorCode.COMPANY_UNREACHABLE) {
       if (err.message.includes('HTTP 5')) {
+        const warning = 'robots.txt returned 5xx; crawling conservatively assumed disallowed per RFC 9309';
+        if (!isLocal) {
+          robotsCache.set(origin, {
+            groups: null,
+            status: 'disallowed',
+            warning,
+            expiresAt: Date.now() + ROBOTS_CACHE_TTL_MS,
+          });
+        }
         return {
           isAllowed: false,
           status: 'disallowed',
-          warning: 'robots.txt returned 5xx; crawling conservatively assumed disallowed per RFC 9309',
+          warning,
         };
       }
       if (err.message.includes('HTTP 4')) {

@@ -9,7 +9,7 @@ import { validateUrl } from './url-validator';
 import { safeFetch } from './fetcher';
 import { cleanHtml } from './cleaner';
 import { checkRobots } from './robots-checker';
-import { rankLinks, RankedLink } from './link-ranker';
+import { rankLinks, RankedLink, extractBrandFromHostname } from './link-ranker';
 import { getDefaultDiscussionRetriever } from './discussion-retriever';
 import { TaroError } from '@/shared';
 
@@ -24,11 +24,15 @@ const TECH_KEYWORDS = [
   'Docker', 'Kubernetes', 'AWS', 'GCP', 'Azure', 'Terraform', 'GraphQL',
 ];
 
-// Curated culture keyword dictionaries
+// Curated culture keyword dictionaries (including Enterprise Leadership Principles)
 const CULTURE_KEYWORDS = [
   'ownership', 'transparency', 'velocity', 'collaboration', 'empathy',
   'integrity', 'curiosity', 'diversity', 'inclusion', 'excellence',
   'customer-obsessed', 'bias for action', 'async-first', 'remote-first',
+  'customer obsession', 'deliver results', 'invent and simplify', 'learn and be curious',
+  'hire and develop the best', 'insist on highest standards', 'think big', 'frugality',
+  'earn trust', 'dive deep', 'have backbone', 'disagree and commit',
+  'first principles', 'high agency', 'radical candor', 'extreme ownership',
 ];
 
 function escapeRegex(str: string): string {
@@ -36,14 +40,34 @@ function escapeRegex(str: string): string {
 }
 
 // Keywords that collide with common English lowercase words and must be matched case-sensitively
-const CASE_SENSITIVE_KEYWORDS = new Set(['Go', 'Rust']);
+const CASE_SENSITIVE_KEYWORDS = new Set(['Go', 'Rust', 'React', 'Express']);
+
+const GO_VERB_PREPOSITIONS = new Set([
+  'to', 'into', 'ahead', 'back', 'further', 'through', 'for', 'here', 'there', 'on', 'with', 'out'
+]);
+
+function isLikelyGolangUsage(text: string): boolean {
+  if (!/\bGo\b/.test(text)) return false;
+  // If in a list (e.g. "Go, Python" or "Go / Rust") or tech conjunction ("Go and Postgres")
+  if (/\bGo\s*[,;/&|\)]/.test(text) || /\bGo\s+(and|or|lang|language|code|dev|engineer|backend|microservices)\b/i.test(text)) {
+    return true;
+  }
+  // Check if any occurrence of Go is NOT followed by a directional verb preposition
+  const matches = [...text.matchAll(/\bGo\s+([a-zA-Z]+)\b/g)];
+  if (matches.length === 0) return true; // standalone "Go"
+  return matches.some((m) => !GO_VERB_PREPOSITIONS.has(m[1].toLowerCase()));
+}
 
 export function extractKeywords(text: string, dictionary: string[]): string[] {
   const lowerText = text.toLowerCase();
   const matched = new Set<string>();
 
   for (const kw of dictionary) {
-    if (CASE_SENSITIVE_KEYWORDS.has(kw)) {
+    if (kw === 'Go') {
+      if (isLikelyGolangUsage(text)) {
+        matched.add('Go');
+      }
+    } else if (CASE_SENSITIVE_KEYWORDS.has(kw)) {
       // Require case-sensitive boundary match on original text
       const escaped = escapeRegex(kw);
       const regex = new RegExp(`\\b${escaped}\\b`);
@@ -64,18 +88,97 @@ export function extractKeywords(text: string, dictionary: string[]): string[] {
 
 /**
  * Extracts a sensible company name from a domain or page title.
+ * Prioritizes brand-matching title segments over generic e-commerce storefront prefixes.
  */
-function deriveCompanyName(domain: string, title?: string): string {
-  if (title) {
-    const parts = title.split(/[|\-–—:]/);
-    if (parts.length > 0 && parts[0].trim().length > 1 && parts[0].trim().length < 40) {
-      return parts[0].trim();
+export function deriveCompanyName(domain: string, title?: string): string {
+  const brand = extractBrandFromHostname(domain);
+  const fallback = brand ? brand.charAt(0).toUpperCase() + brand.slice(1) : 'Company';
+
+  if (!title || typeof title !== 'string') {
+    return fallback;
+  }
+
+  const cleanTitle = title.replace(/&nbsp;/g, '').trim();
+  if (cleanTitle.length === 0) {
+    return fallback;
+  }
+
+  const parts = cleanTitle
+    .split(/[|\-–—:]/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
+
+  // 1. If a title part contains or matches the brand name (e.g. "Amazon.in" -> "Amazon")
+  if (brand) {
+    const brandLower = brand.toLowerCase();
+    const brandPart = parts.find((p) => p.toLowerCase().includes(brandLower));
+    if (brandPart) {
+      // Strip TLD if present in part (e.g. "Amazon.in" -> "Amazon")
+      const cleaned = brandPart.replace(/\.[a-z]{2,8}$/i, '').trim();
+      if (cleaned.length >= 2 && cleaned.length <= 30) {
+        return cleaned;
+      }
     }
   }
 
-  // Fallback to domain name without TLD
-  const base = domain.replace(/^www\./, '').split('.')[0];
-  return base.charAt(0).toUpperCase() + base.slice(1);
+  // 2. Filter out generic marketing noise prefixes (e.g. "Online Shopping", "Shop Online", "Welcome to")
+  const isGenericMarketing = /^(online shopping|shop online|welcome to|official site|home|login|portal)/i;
+  for (const part of parts) {
+    if (!isGenericMarketing.test(part) && part.length >= 2 && part.length <= 40) {
+      return part;
+    }
+  }
+
+  return fallback;
+}
+
+// ── Bounded In-Process Research Cache (ADR 001) ─────────────────────────────
+interface CachedResearch {
+  result: CompanyResearchResult;
+  timestamp: number;
+}
+
+const researchCache = new Map<string, CachedResearch>();
+const RESEARCH_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+const MAX_CACHE_ENTRIES = 50; // Hard memory cap (< 5MB RAM)
+
+function normalizeCacheKey(hostnameOrUrl: string): string {
+  let host = hostnameOrUrl.trim().toLowerCase();
+  try {
+    if (host.includes('://')) {
+      host = new URL(host).hostname;
+    } else if (host.includes('/')) {
+      host = host.split('/')[0];
+    }
+  } catch {
+    // fallback to raw string
+  }
+  return host.replace(/^www\./, '').trim();
+}
+
+export function getCachedResearch(hostnameOrUrl: string): CompanyResearchResult | null {
+  const key = normalizeCacheKey(hostnameOrUrl);
+  const entry = researchCache.get(key);
+  if (entry && Date.now() - entry.timestamp < RESEARCH_CACHE_TTL_MS) {
+    return entry.result;
+  }
+  return null;
+}
+
+export function setCachedResearch(hostnameOrUrl: string, result: CompanyResearchResult): void {
+  const key = normalizeCacheKey(hostnameOrUrl);
+  // Oldest-entry eviction when capacity reached
+  if (researchCache.size >= MAX_CACHE_ENTRIES) {
+    const oldestKey = researchCache.keys().next().value;
+    if (oldestKey) {
+      researchCache.delete(oldestKey);
+    }
+  }
+  researchCache.set(key, { result, timestamp: Date.now() });
+}
+
+export function clearResearchCache(): void {
+  researchCache.clear();
 }
 
 /**
@@ -127,6 +230,20 @@ export async function crawlCompany(
 
   const rootUrl = parsedRoot.toString();
   const domain = parsedRoot.hostname;
+  const cacheKey = normalizeCacheKey(domain);
+  const isLocal = domain === 'localhost' || domain === '127.0.0.1' || domain.endsWith('.local');
+
+  // Check in-process research cache (ADR 001) - excluded for local test domains
+  if (!options.skipCache && !isLocal) {
+    const cached = getCachedResearch(cacheKey);
+    if (cached) {
+      clearTimeout(globalTimeoutId);
+      return {
+        ...cached,
+        durationMs: Date.now() - startTime,
+      };
+    }
+  }
 
   // 1. Check robots.txt for the domain root
   const robots = await checkRobots(rootUrl, { allowLocalhost, timeoutMs: 2500 });
@@ -170,6 +287,7 @@ export async function crawlCompany(
       title: cleanedRoot.title,
       metaDescription: cleanedRoot.metaDescription,
       cleanText: cleanedRoot.cleanText,
+      cleanMarkdown: cleanedRoot.cleanMarkdown || cleanedRoot.cleanText,
       headings: cleanedRoot.headings,
       wordCount: cleanedRoot.wordCount,
       depth: 0,
@@ -199,6 +317,34 @@ export async function crawlCompany(
   // 3. Discover and Rank Sub-pages (Depth 1)
   const visitedUrls = new Set<string>([rootUrl, pages[0].url]);
   const depth1Candidates: RankedLink[] = rankLinks(rootHtml, rootUrl, 6);
+
+  // Proactive Careers Discovery: If no high-confidence careers/hiring link was found in root HTML,
+  // probe standard careers endpoints (/careers, /jobs, careers.<domain>, <brand>.jobs)
+  // Only executed for public remote domains, avoiding local test mock servers
+  if (!isLocal && !depth1Candidates.some((c) => c.score >= 10)) {
+    const brand = extractBrandFromHostname(domain);
+    const candidateProbes: string[] = [
+      `${parsedRoot.origin}/careers`,
+      `${parsedRoot.origin}/jobs`,
+      `${parsedRoot.origin}/about/careers`,
+    ];
+    if (brand && brand.length >= 3) {
+      candidateProbes.push(`https://${brand}.jobs/`);
+      const cleanBase = domain.replace(/^www\./, '');
+      candidateProbes.push(`https://careers.${cleanBase}/`);
+      candidateProbes.push(`https://jobs.${cleanBase}/`);
+    }
+    for (const probeUrl of candidateProbes) {
+      if (!visitedUrls.has(probeUrl) && !depth1Candidates.some((c) => c.url === probeUrl)) {
+        depth1Candidates.push({
+          url: probeUrl,
+          score: 10,
+          anchorText: 'Careers Portal',
+          matchedKeywords: ['careers'],
+        });
+      }
+    }
+  }
 
   // Filter out visited
   const depth1ToFetch = depth1Candidates.filter((c) => !visitedUrls.has(c.url));
@@ -237,6 +383,7 @@ export async function crawlCompany(
         title: cleaned.title,
         metaDescription: cleaned.metaDescription,
         cleanText: cleaned.cleanText,
+        cleanMarkdown: cleaned.cleanMarkdown || cleaned.cleanText,
         headings: cleaned.headings,
         wordCount: cleaned.wordCount,
         depth: 1,
@@ -288,6 +435,7 @@ export async function crawlCompany(
           title: cleaned.title,
           metaDescription: cleaned.metaDescription,
           cleanText: cleaned.cleanText,
+          cleanMarkdown: cleaned.cleanMarkdown || cleaned.cleanText,
           headings: cleaned.headings,
           wordCount: cleaned.wordCount,
           depth: 2,
@@ -321,7 +469,7 @@ export async function crawlCompany(
     warnings.push(`Discussion retrieval failed: ${err.message}`);
   }
 
-  return {
+  const result: CompanyResearchResult = {
     companyName,
     domain,
     rootUrl,
@@ -335,4 +483,10 @@ export async function crawlCompany(
     insightsIncluded: interviewInsights.length > 0,
     durationMs: Date.now() - startTime,
   };
+
+  if (!options.skipCache && !isLocal && pages.length > 0) {
+    setCachedResearch(domain, result);
+  }
+
+  return result;
 }

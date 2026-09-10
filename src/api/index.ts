@@ -6,6 +6,9 @@ import { validateServerEnv, ServerEnv, TaroError, ErrorCode } from '@/shared';
 import { getHttpStatusForErrorCode } from './shared/errors/status-map';
 import { connectDatabase } from './shared/db';
 import { authRouter } from './auth/routes/auth.routes';
+import { researchRouter } from './research/routes/research.routes';
+import { kitRouter } from './kits/routes/kit.routes';
+import { jobRouter } from './jobs/routes/job.routes';
 
 // Validate server environment on boot (in test mode, harnesses provide overrides)
 let serverEnv: ServerEnv | null = null;
@@ -49,6 +52,15 @@ app.get('/api/health', (_req: Request, res: Response) => {
 
 // ── Auth Routes (D1) ─────────────────────────────────────────────────────────
 app.use('/api/auth', authRouter);
+
+// ── Research & Crawler Routes (D2) ──────────────────────────────────────────
+app.use('/api/research', researchRouter);
+
+// ── Kit Routes (D3) ─────────────────────────────────────────────────────────
+app.use('/api/kits', kitRouter);
+
+// ── Job Opportunities Routes ────────────────────────────────────────────────
+app.use('/api/jobs', jobRouter);
 
 // ── 404 Fallback ─────────────────────────────────────────────────────────────
 app.use((_req: Request, res: Response, _next: NextFunction) => {

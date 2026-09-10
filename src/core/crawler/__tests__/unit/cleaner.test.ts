@@ -7,12 +7,14 @@ describe('semantic HTML cleaner', () => {
       title: '',
       headings: [],
       cleanText: '',
+      cleanMarkdown: '',
       wordCount: 0,
     });
     expect(cleanHtml('   ')).toEqual({
       title: '',
       headings: [],
       cleanText: '',
+      cleanMarkdown: '',
       wordCount: 0,
     });
   });

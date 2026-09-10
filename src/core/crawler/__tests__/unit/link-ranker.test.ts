@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { rankLinks, isInternalLink, KEYWORD_WEIGHTS } from '../../link-ranker';
+import { rankLinks, isInternalLink, isAssociatedCompanyLink, KEYWORD_WEIGHTS } from '../../link-ranker';
 
 describe('link-ranker', () => {
   describe('isInternalLink', () => {
@@ -132,6 +132,41 @@ describe('link-ranker', () => {
       const results = rankLinks(html, baseUrl);
       expect(results.length).toBe(1);
       expect(results[0].url).toBe('https://acme.com/careers');
+    });
+
+    it('accepts and ranks cross-TLD brand careers portals and ATS links', () => {
+      const html = `
+        <html>
+          <body>
+            <a href="https://acme.jobs/">Careers Portal</a>
+            <a href="https://aboutacme.com/values">Our Values</a>
+            <a href="https://jobs.lever.co/acme">Open Roles on Lever</a>
+            <a href="https://attacker.org/careers">Fake Careers</a>
+            <a href="https://acme.attacker.org/jobs">Subdomain Spoof</a>
+          </body>
+        </html>
+      `;
+      const results = rankLinks(html, 'https://www.acme.in/', 5);
+      const urls = results.map((r) => r.url);
+      expect(urls).toContain('https://acme.jobs/');
+      expect(urls).toContain('https://aboutacme.com/values');
+      expect(urls).toContain('https://jobs.lever.co/acme');
+      expect(urls).not.toContain('https://attacker.org/careers');
+      expect(urls).not.toContain('https://acme.attacker.org/jobs');
+    });
+  });
+
+  describe('isAssociatedCompanyLink', () => {
+    it('accurately identifies verified company portals and rejects spoofed domains', () => {
+      expect(isAssociatedCompanyLink('www.amazon.in', 'amazon.jobs', 'https://amazon.jobs/', 'Careers')).toBe(true);
+      expect(isAssociatedCompanyLink('www.amazon.in', 'aboutamazon.in', 'https://aboutamazon.in/', 'About Amazon')).toBe(true);
+      expect(isAssociatedCompanyLink('linear.app', 'jobs.lever.co', 'https://jobs.lever.co/linear', 'Careers')).toBe(true);
+      expect(isAssociatedCompanyLink('stripe.com', 'boards.greenhouse.io', 'https://boards.greenhouse.io/stripe', 'Jobs')).toBe(true);
+
+      // Security: spoofing rejection
+      expect(isAssociatedCompanyLink('www.amazon.in', 'attacker.org', 'https://attacker.org/careers', 'Careers')).toBe(false);
+      expect(isAssociatedCompanyLink('www.amazon.in', 'amazon.attacker.org', 'https://amazon.attacker.org/careers', 'Careers')).toBe(false);
+      expect(isAssociatedCompanyLink('acme.com', 'fakeacme.com', 'https://fakeacme.com/careers', 'Careers')).toBe(false);
     });
   });
 });

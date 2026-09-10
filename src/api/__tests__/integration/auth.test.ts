@@ -325,4 +325,221 @@ describe('D1 Identity & Authentication Integration Suite', () => {
       expect(clearedCookie).toContain('Expires=Thu, 01 Jan 1970 00:00:00 GMT');
     });
   });
+
+  // ── Redis-Backed OTP Verification HTTP Endpoints ─────────────────────────
+  describe('POST /api/auth/send-otp & /api/auth/verify-otp & /api/auth/resend-otp', () => {
+    const otpIp = '10.200.3.1';
+
+    it('initiates pending registration via send-otp and completes activation via verify-otp', async () => {
+      // 1. Send OTP
+      const sendRes = await request(app)
+        .post('/api/auth/send-otp')
+        .set('X-Forwarded-For', otpIp)
+        .send({
+          email: 'otp.candidate@recon.ai',
+          password: 'securePassword123!',
+        });
+
+      expect(sendRes.status).toBe(200);
+      expect(sendRes.body.status).toBe('pending_verification');
+      expect(sendRes.body.email).toBe('otp.candidate@recon.ai');
+      expect(sendRes.body.cooldownSeconds).toBe(60);
+      expect(sendRes.body.devOtp).toBeDefined();
+      expect(sendRes.body.devOtp).toMatch(/^\d{6}$/);
+
+      const generatedOtp = sendRes.body.devOtp;
+
+      // 2. Verify with wrong OTP
+      const wrongRes = await request(app)
+        .post('/api/auth/verify-otp')
+        .set('X-Forwarded-For', otpIp)
+        .send({
+          email: 'otp.candidate@recon.ai',
+          otp: '000000',
+        });
+
+      expect(wrongRes.status).toBe(401);
+      expect(wrongRes.body.error).toBeDefined();
+      expect(wrongRes.body.error.code).toBe('INVALID_CREDENTIALS');
+      expect(wrongRes.body.error.message).toContain('2 attempt(s) remaining');
+
+      // 3. Verify with valid OTP
+      const validRes = await request(app)
+        .post('/api/auth/verify-otp')
+        .set('X-Forwarded-For', otpIp)
+        .send({
+          email: 'otp.candidate@recon.ai',
+          otp: generatedOtp,
+        });
+
+      expect(validRes.status).toBe(201);
+      expect(validRes.body.user).toBeDefined();
+      expect(validRes.body.user.email).toBe('otp.candidate@recon.ai');
+      expect(validRes.body.user.id).toBeDefined();
+
+      // Ensure session cookie is issued upon successful OTP verification
+      const cookies = validRes.headers['set-cookie'] as string[];
+      expect(cookies).toBeDefined();
+      const sessionCookie = cookies.find((c) => c.startsWith(`${SESSION_COOKIE_NAME}=`));
+      expect(sessionCookie).toBeDefined();
+
+      // Ensure user is verified in DB
+      const dbUser = await UserModel.findOne({ email: 'otp.candidate@recon.ai' });
+      expect(dbUser).not.toBeNull();
+      expect(dbUser!.isVerified).toBe(true);
+    });
+
+    it('rejects send-otp when email already belongs to a verified user', async () => {
+      // First register and verify a user
+      await UserModel.create({
+        email: 'existing.verified@recon.ai',
+        passwordHash: 'somehashedpassword',
+        isVerified: true,
+      });
+
+      const res = await request(app)
+        .post('/api/auth/send-otp')
+        .set('X-Forwarded-For', '10.200.3.2')
+        .send({
+          email: 'existing.verified@recon.ai',
+          password: 'securePassword123!',
+        });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe('USER_EXISTS');
+    });
+
+    it('rejects verify-otp with non-numeric or non-6-digit code', async () => {
+      const res = await request(app)
+        .post('/api/auth/verify-otp')
+        .set('X-Forwarded-For', '10.200.3.3')
+        .send({
+          email: 'test@recon.ai',
+          otp: '12345',
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_INPUT');
+    });
+
+    it('enforces 60-second cooldown on consecutive resend-otp requests', async () => {
+      const cooldownIp = '10.200.3.4';
+      const uniqueEmail = `cooldown.${Date.now()}@recon.ai`;
+      // 1. Initial send
+      await request(app)
+        .post('/api/auth/send-otp')
+        .set('X-Forwarded-For', cooldownIp)
+        .send({
+          email: uniqueEmail,
+          password: 'securePassword123!',
+        });
+
+      // 2. Immediate resend within 60s cooldown
+      const resendRes = await request(app)
+        .post('/api/auth/resend-otp')
+        .set('X-Forwarded-For', cooldownIp)
+        .send({
+          email: uniqueEmail,
+        });
+
+      expect(resendRes.status).toBe(429);
+      expect(resendRes.body.error.code).toBe('AUTH_RATE_LIMITED');
+      expect(resendRes.body.error.message).toMatch(/Please wait \d+ seconds before requesting another code/);
+    });
+  });
+
+  // ── 15-Minute Expiring Password Reset Suite ──────────────────────────────
+  describe('POST /api/auth/forgot-password & /api/auth/reset-password', () => {
+    it('executes full password reset lifecycle: request link -> update password -> login with new credentials', async () => {
+      const resetEmail = `reset.${Date.now()}@recon.ai`;
+      const originalPassword = 'InitialPassword123!';
+      const newPassword = 'UpdatedPassword456!';
+      const clientIp = '10.200.4.1';
+
+      // 1. Create registered user
+      await request(app)
+        .post('/api/auth/register')
+        .set('X-Forwarded-For', clientIp)
+        .send({
+          email: resetEmail,
+          password: originalPassword,
+        });
+
+      // 2. Request password reset
+      const forgotRes = await request(app)
+        .post('/api/auth/forgot-password')
+        .set('X-Forwarded-For', clientIp)
+        .send({
+          email: resetEmail,
+        });
+
+      expect(forgotRes.status).toBe(200);
+      expect(forgotRes.body.status).toBe('reset_link_dispatched');
+      expect(forgotRes.body.cooldownSeconds).toBe(60);
+      expect(forgotRes.body.devResetLink).toBeDefined();
+
+      const rawUrl = forgotRes.body.devResetLink;
+      const token = new URL(rawUrl).searchParams.get('token');
+      expect(token).toBeDefined();
+
+      // 3. Reset password using the 15-minute token
+      const resetRes = await request(app)
+        .post('/api/auth/reset-password')
+        .set('X-Forwarded-For', clientIp)
+        .send({
+          token,
+          newPassword,
+        });
+
+      expect(resetRes.status).toBe(200);
+      expect(resetRes.body.status).toBe('password_reset_success');
+
+      // 4. Token cannot be reused (Single-Use Guarantee)
+      const reuseRes = await request(app)
+        .post('/api/auth/reset-password')
+        .set('X-Forwarded-For', clientIp)
+        .send({
+          token,
+          newPassword: 'AnotherPassword789!',
+        });
+
+      expect(reuseRes.status).toBe(401);
+      expect(reuseRes.body.error.code).toBe('TOKEN_EXPIRED');
+
+      // 5. Old password no longer works
+      const oldLoginRes = await request(app)
+        .post('/api/auth/login')
+        .set('X-Forwarded-For', '10.200.4.2')
+        .send({
+          email: resetEmail,
+          password: originalPassword,
+        });
+      expect(oldLoginRes.status).toBe(401);
+
+      // 6. New password successfully logs in and sets session cookie
+      const newLoginRes = await request(app)
+        .post('/api/auth/login')
+        .set('X-Forwarded-For', '10.200.4.3')
+        .send({
+          email: resetEmail,
+          password: newPassword,
+        });
+      expect(newLoginRes.status).toBe(200);
+      expect(newLoginRes.body.user.email).toBe(resetEmail);
+      expect(newLoginRes.headers['set-cookie']).toBeDefined();
+    });
+
+    it('preserves privacy on forgot-password for non-existent users', async () => {
+      const res = await request(app)
+        .post('/api/auth/forgot-password')
+        .set('X-Forwarded-For', '10.200.4.4')
+        .send({
+          email: 'unknown.ghost@recon.ai',
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('reset_link_dispatched');
+      expect(res.body.devResetLink).toBeUndefined();
+    });
+  });
 });

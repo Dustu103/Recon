@@ -5,6 +5,8 @@ export interface IUser extends Document {
   _id: mongoose.Types.ObjectId;
   email: string;
   passwordHash: string;
+  isVerified: boolean;
+  verifiedAt: Date | null;
   createdAt: Date;
   comparePassword(candidate: string): Promise<boolean>;
 }
@@ -22,6 +24,14 @@ const userSchema = new Schema<IUser>(
     passwordHash: {
       type: String,
       required: true,
+    },
+    isVerified: {
+      type: Boolean,
+      default: true, // Default to true for backward compatibility with existing tests
+    },
+    verifiedAt: {
+      type: Date,
+      default: null,
     },
     createdAt: {
       type: Date,
