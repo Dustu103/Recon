@@ -20,7 +20,7 @@ import {
 
 export default function RegisterPage() {
   const router = useRouter();
-  const { user, isLoading: isAuthLoading } = useAuth();
+  const { user, verifyOtp, isLoading: isAuthLoading } = useAuth();
 
   // Registration step: 'form' | 'otp'
   const [step, setStep] = useState<'form' | 'otp'>('form');
@@ -160,10 +160,10 @@ export default function RegisterPage() {
     setError(null);
 
     try {
-      await authApi.verifyOtp({ email, otp: fullOtp });
-      // On success, session cookie is set; redirect to candidate dashboard
-      router.push('/dashboard');
+      await verifyOtp(email, fullOtp);
+      router.replace('/dashboard');
     } catch (err: unknown) {
+      setIsSubmitting(false);
       if (err instanceof ApiClientError) {
         setError(err.message);
       } else if (err instanceof Error) {
@@ -171,8 +171,6 @@ export default function RegisterPage() {
       } else {
         setError('Verification failed. Please check your code and try again.');
       }
-    } finally {
-      setIsSubmitting(false);
     }
   };
 

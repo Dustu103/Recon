@@ -24,7 +24,7 @@ describe('Unified Resilient LlmClient', () => {
     expect(limiter.getCurrentTokens()).toBeGreaterThan(0);
   });
 
-  it('strictly throws LLM_PROVIDER_ERROR when live providers are not configured and mock is false', async () => {
+  it('strictly throws INTERNAL_ERROR when live providers are not configured and mock is false', async () => {
     const origGemini = process.env.GEMINI_API_KEY;
     const origGroq = process.env.GROQ_API_KEY;
 
@@ -37,7 +37,7 @@ describe('Unified Resilient LlmClient', () => {
       try {
         await client.complete('test', { mock: false });
       } catch (err) {
-        expect((err as TaroError).code).toBe(ErrorCode.LLM_PROVIDER_ERROR);
+        expect((err as TaroError).code).toBe(ErrorCode.INTERNAL_ERROR);
       }
     } finally {
       if (origGemini) process.env.GEMINI_API_KEY = origGemini;

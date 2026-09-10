@@ -58,8 +58,9 @@ describe('kit-orchestrator', () => {
       expect(schedule.days).toHaveLength(7);
       expect(schedule.days[0].day).toBe(1);
       expect(schedule.days[6].day).toBe(7);
-      expect(schedule.days[0].question_ids).toContain('q1');
-      expect(schedule.days[1].question_ids).toContain('q2');
+      // Under front-loaded difficulty sorting: q2 (diff 3) -> day 1, q1 (diff 2) -> day 2, q3 (diff 1) -> day 3
+      expect(schedule.days[0].question_ids).toContain('q2');
+      expect(schedule.days[1].question_ids).toContain('q1');
       expect(schedule.days[2].question_ids).toContain('q3');
 
       // SuperRefine verification via Zod

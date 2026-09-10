@@ -7,6 +7,7 @@ import {
   Kit,
   KitSchema,
   Role,
+  Requirement,
   CompanyBrief,
   Question,
   Flashcard,
@@ -24,6 +25,12 @@ import { crawlCompany } from '../crawler/research-orchestrator';
 import { LlmClient, getDefaultLlmClient } from '../llm/client';
 import { matchCuratedQuestions } from './curated-questions';
 import { PipelineProgress } from './types';
+import {
+  buildSchedule,
+  checkCoverage,
+  buildCoverageEnvelope,
+  executeSecondPassGapFill,
+} from '../deterministic';
 
 export interface GenerateKitParams {
   jd: string;
@@ -35,78 +42,27 @@ export interface GenerateKitParams {
   onProgress?: (progress: PipelineProgress) => void;
 }
 
-const DEFAULT_DAILY_MINUTES = 45;
-
 /**
- * Builds an evenly balanced Day-by-Day study schedule adhering strictly to ScheduleSchema.
+ * Builds a deterministic contiguous-block Day-by-Day study schedule strictly adhering to ScheduleSchema.
  */
-export function buildStudySchedule(questions: Question[], daysAvailable: number): Schedule {
-  const daysCount = Math.max(1, Math.min(60, Math.floor(daysAvailable)));
-  const days: Schedule['days'] = [];
-
-  // Group questions into buckets for the available days
-  const qIds = questions.map((q) => q.id);
-  const buckets: string[][] = Array.from({ length: daysCount }, () => []);
-
-  if (qIds.length > 0) {
-    qIds.forEach((qId, index) => {
-      const targetDay = index % daysCount;
-      buckets[targetDay].push(qId);
-    });
-  }
-
-  const focusThemes = [
-    'Core Technical Competencies & Problem Solving',
-    'System Architecture, High-Throughput Design & Cloud',
-    'Data Structures, Algorithms & Code Optimization',
-    'Behavioral Scenarios & Company Leadership Values',
-    'Domain Specialization & Edge Cases',
-    'Hands-on Practical Scenarios & Failure Recovery',
-    'Comprehensive Review & Timed Mock Interview',
-  ];
-
-  for (let i = 0; i < daysCount; i++) {
-    const dayNumber = i + 1;
-    const assignedQIds = buckets[i];
-    const themeIndex = i % focusThemes.length;
-    const focus =
-      i === daysCount - 1 && daysCount > 1
-        ? 'Final Review & Mock Practice'
-        : focusThemes[themeIndex];
-
-    days.push({
-      day: dayNumber,
-      focus,
-      question_ids: assignedQIds,
-      minutes: DEFAULT_DAILY_MINUTES,
-    });
-  }
-
-  return {
-    days_available: daysCount,
-    days,
-  };
+export function buildStudySchedule(
+  questions: Question[],
+  daysAvailable: number,
+  requirements: Requirement[] = []
+): Schedule {
+  return buildSchedule(questions, requirements, daysAvailable);
 }
 
 /**
  * Computes coverage matrix tracking covered and uncovered requirement IDs.
  */
-export function buildCoverage(role: Role, questions: Question[]): Coverage {
-  const coveredSet = new Set<string>();
-  for (const q of questions) {
-    for (const rId of q.requirement_ids) {
-      coveredSet.add(rId);
-    }
-  }
-
-  const uncovered_requirement_ids = role.requirements
-    .map((r) => r.id)
-    .filter((id) => !coveredSet.has(id));
-
-  return {
-    uncovered_requirement_ids,
-    passes: 1,
-  };
+export function buildCoverage(
+  role: Role,
+  questions: Question[],
+  passes: number = 1
+): Coverage {
+  const result = checkCoverage(role.requirements, questions);
+  return buildCoverageEnvelope(result.uncoveredIds, passes);
 }
 
 /**
@@ -210,7 +166,24 @@ export async function generateKit(params: GenerateKitParams): Promise<Kit> {
     }
   );
 
-  const questions = [...curatedQuestions, ...questionsResult.questions];
+  const initialQuestions = [...curatedQuestions, ...questionsResult.questions];
+
+  // ── Step 4c: Domain 4.2 Deterministic Second-Pass Gap Fill ──────────────────
+  const gapFillResult = await executeSecondPassGapFill({
+    requirements: role.requirements,
+    initialQuestions,
+    brief: briefResult.brief,
+    client,
+    mock,
+    nextQuestionIndex: questionsResult.nextQuestionIndex,
+    roleTitle: role.title,
+    roleSeniority: role.seniority,
+    researchResult: research,
+    onProgress,
+  });
+
+  const questions = gapFillResult.questions;
+  const coverage = gapFillResult.coverage;
 
   // ── Step 5: Generate Rapid-Revision Flashcards ──────────────────────────────
   if (onProgress) {
@@ -246,8 +219,7 @@ export async function generateKit(params: GenerateKitParams): Promise<Kit> {
     });
   }
 
-  const schedule = buildStudySchedule(questions, days);
-  const coverage = buildCoverage(role, questions);
+  const schedule = buildSchedule(questions, role.requirements, days);
 
   const kit: Kit = {
     source: {

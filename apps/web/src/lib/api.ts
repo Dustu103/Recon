@@ -153,6 +153,26 @@ export interface GenerateKitInput {
   jobUrl?: string;
 }
 
+export type KitStatus =
+  | 'pending'
+  | 'crawling'
+  | 'extracting'
+  | 'generating'
+  | 'scheduling'
+  | 'completed'
+  | 'failed';
+
+export interface KitProgressResponse {
+  kitId: string;
+  status: KitStatus;
+  percent: number;
+  step: string;
+  message: string;
+  completed: boolean;
+  checkpoints?: any;
+  error?: { code: string; message: string; step?: string } | string | null;
+}
+
 export interface KitListItem {
   _id: string;
   title: string;
@@ -160,7 +180,7 @@ export interface KitListItem {
   companyUrl: string;
   roleTitle: string;
   days: number;
-  status: 'generating' | 'completed' | 'failed';
+  status: KitStatus;
   createdAt: string;
   updatedAt: string;
 }
@@ -175,7 +195,9 @@ export interface KitDetail {
   days: number;
   jobDescription: string;
   kit: any;
-  status: 'generating' | 'completed' | 'failed';
+  status: KitStatus;
+  checkpoints?: any;
+  error?: any;
   createdAt: string;
   updatedAt: string;
 }
@@ -185,64 +207,87 @@ export const kitsApi = {
     input: GenerateKitInput,
     onProgress?: (progress: { step: string; percent: number; message: string }) => void
   ): Promise<{ kitId: string; kit: any }> {
-    // Attempt SSE streaming first for rich real-time UI feedback
-    if (typeof window !== 'undefined' && 'ReadableStream' in window) {
+    // 1. Submit generation request (returns 202 Accepted with kitId and progressUrl)
+    const initRes = await apiFetch<{
+      success: boolean;
+      data: { kitId: string; status: KitStatus; isExisting?: boolean; progressUrl: string };
+    }>('/api/kits/generate', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+
+    const kitId = initRes.data.kitId;
+
+    if (onProgress) {
+      onProgress({
+        step: initRes.data.status || 'pending',
+        percent: 5,
+        message: 'Generation request queued...',
+      });
+    }
+
+    // 2. Resilient Polling Loop (primary path to bypass Vercel buffering)
+    const POLL_INTERVAL_MS = 2500;
+    const MAX_POLLS = 120; // 5 minutes max
+    let polls = 0;
+
+    while (polls < MAX_POLLS) {
+      await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+      polls++;
+
       try {
-        const response = await fetch('/api/kits/generate?stream=true', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Accept: 'text/event-stream',
-          },
-          body: JSON.stringify(input),
-          credentials: 'include',
+        const progressRes = await apiFetch<{
+          success: boolean;
+          data: KitProgressResponse;
+        }>(`/api/kits/${kitId}/progress`, {
+          method: 'GET',
         });
 
-        if (response.ok && response.body) {
-          const reader = response.body.getReader();
-          const decoder = new TextDecoder();
-          let buffer = '';
-          let result: { kitId: string; kit: any } | null = null;
+        const p = progressRes.data;
 
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
+        if (onProgress) {
+          onProgress({
+            step: p.step,
+            percent: p.percent,
+            message: p.message,
+          });
+        }
 
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n\n');
-            buffer = lines.pop() || '';
+        if (p.completed || p.status === 'completed') {
+          // Fetch the final assembled kit
+          const finalKit = await kitsApi.get(kitId);
+          return {
+            kitId,
+            kit: finalKit.kit,
+          };
+        }
 
-            for (const block of lines) {
-              const eventMatch = block.match(/event:\s*(\w+)/);
-              const dataMatch = block.match(/data:\s*(\{.*\})/s);
-              if (dataMatch) {
-                const event = eventMatch ? eventMatch[1] : 'message';
-                const payload = JSON.parse(dataMatch[1]);
-                if (event === 'progress' && onProgress) {
-                  onProgress(payload);
-                } else if (event === 'complete') {
-                  result = payload;
-                } else if (event === 'error') {
-                  throw new ApiClientError(payload.code, payload.message, 400);
-                }
-              }
-            }
-          }
-
-          if (result) return result;
+        if (p.status === 'failed') {
+          const errMsg =
+            typeof p.error === 'object' && p.error?.message
+              ? p.error.message
+              : typeof p.error === 'string'
+              ? p.error
+              : p.message || 'Generation failed';
+          const errCode =
+            typeof p.error === 'object' && p.error?.code ? p.error.code : 'GENERATION_FAILED';
+          throw new ApiClientError(errCode, errMsg, 400);
         }
       } catch (err) {
-        if (err instanceof ApiClientError) throw err;
-        // Fallback to standard JSON POST
+        if (err instanceof ApiClientError && err.code === 'GENERATION_FAILED') {
+          throw err;
+        }
+        // Network flutter during polling - continue loop unless fatal
       }
     }
 
-    const res = await apiFetch<{ success: boolean; data: { kitId: string; kit: any } }>(
-      '/api/kits/generate',
-      {
-        method: 'POST',
-        body: JSON.stringify(input),
-      }
+    throw new ApiClientError('TIMEOUT', 'Kit generation timed out. Please check your kits list shortly.', 408);
+  },
+
+  async getProgress(kitId: string): Promise<KitProgressResponse> {
+    const res = await apiFetch<{ success: boolean; data: KitProgressResponse }>(
+      `/api/kits/${kitId}/progress`,
+      { method: 'GET' }
     );
     return res.data;
   },

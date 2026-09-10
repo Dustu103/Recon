@@ -89,7 +89,7 @@ A single root `tsconfig.json` provides strict typechecking, output generation (`
 
 | Command | Purpose |
 | :--- | :--- |
-| `npm test` | Runs all 160 unit and integration tests across the unified tree in a single Vitest pass (~3.5s) |
+| `npm test` | Runs all 36 test files and 314 unit and integration tests across the unified tree in a single Vitest pass |
 | `npm run test:shared` | Runs unit tests for schemas, error codes, and ID generator |
 | `npm run test:core` | Runs crawler, link-ranker, and deterministic tests |
 | `npm run test:api` | Runs Express API and database integration tests |

@@ -88,9 +88,9 @@ export async function extractRequirements(
   }));
 
   const role: Role = {
-    title: rawParsed.title.trim() || 'Software Engineer',
-    seniority: rawParsed.seniority.trim() || (isThinJd ? 'Not Specified' : 'Mid-Level'),
-    responsibilities: rawParsed.responsibilities.map((r) => r.trim()).filter(Boolean),
+    title: rawParsed.title?.trim() || 'Software Engineer',
+    seniority: rawParsed.seniority?.trim() || (isThinJd ? 'Not Specified' : 'Mid-Level'),
+    responsibilities: (rawParsed.responsibilities || []).map((r) => r.trim()).filter(Boolean),
     requirements,
   };
 

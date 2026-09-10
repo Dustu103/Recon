@@ -36,6 +36,7 @@ export interface CompanyResearchResult {
   cultureKeywords: string[];
   engineeringTechStack: string[];
   interviewInsights: DiscussionSnippet[];
+  discussionNotes?: string | null;
   warnings: string[];
   crawledAt: string;
   insightsIncluded: boolean;

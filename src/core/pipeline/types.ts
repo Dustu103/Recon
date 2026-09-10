@@ -1,14 +1,17 @@
 /**
  * Domain 3: Pipeline Stage Interfaces & Types
  */
-import { Role, CompanyBrief, Question, Flashcard, CompanyResearchResult } from '@taro/shared';
+import { Role, CompanyBrief, Question, Flashcard } from '@taro/shared';
+import { CompanyResearchResult } from '../crawler/types';
 import { LlmClient } from '../llm/client';
 
 export interface PipelineProgressEvent {
-  step: 'extract' | 'brief' | 'questions' | 'flashcards' | 'validation';
+  step: 'extract' | 'crawl' | 'brief' | 'questions' | 'flashcards' | 'validation' | 'schedule' | 'complete';
   percent: number;
   message: string;
 }
+
+export type PipelineProgress = PipelineProgressEvent;
 
 export interface PipelineOptions {
   client?: LlmClient;
@@ -55,8 +58,8 @@ export interface DraftKitEnvelope {
   company_brief: CompanyBrief;
   questions: Question[];
   flashcards: Flashcard[];
-  nextRequirementIndex: number;
-  nextQuestionIndex: number;
-  nextFlashcardIndex: number;
-  degradations: string[];
+  nextRequirementIndex?: number;
+  nextQuestionIndex?: number;
+  nextFlashcardIndex?: number;
+  degradations?: string[];
 }

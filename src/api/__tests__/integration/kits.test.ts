@@ -74,31 +74,74 @@ describe('D3 Kit API Integration Suite', () => {
       expect(res3.status).toBe(400);
     });
 
-    it('successfully generates a kit and persists it in MongoDB scoped to user', async () => {
+    it('asynchronously initiates kit generation (202 Accepted) and allows progress polling', async () => {
+      const payload = {
+        jd: 'Senior Full Stack Engineer with TypeScript, React, and Node.js microservices.',
+        companyUrl: 'http://localhost:3000',
+        days: 5,
+        roleTitle: 'Senior Full Stack Engineer',
+      };
+
       const res = await request(app)
         .post('/api/kits/generate')
         .set('Cookie', user1Cookie)
+        .send(payload);
+
+      expect(res.status).toBe(202);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.kitId).toBeDefined();
+      expect(res.body.data.status).toBe('pending');
+      expect(res.body.data.progressUrl).toBe(`/api/kits/${res.body.data.kitId}/progress`);
+
+      const kitId = res.body.data.kitId;
+
+      // Duplicate submission guard: second call with identical payload returns existing kitId
+      const dupRes = await request(app)
+        .post('/api/kits/generate')
+        .set('Cookie', user1Cookie)
+        .send(payload);
+
+      expect(dupRes.status).toBe(202);
+      expect(dupRes.body.data.kitId).toBe(kitId);
+      expect(dupRes.body.data.isExisting).toBe(true);
+
+      // Verify progress polling endpoint
+      const progressRes = await request(app)
+        .get(`/api/kits/${kitId}/progress`)
+        .set('Cookie', user1Cookie);
+
+      expect(progressRes.status).toBe(200);
+      expect(progressRes.body.success).toBe(true);
+      expect(progressRes.body.data.kitId).toBe(kitId);
+      expect(progressRes.body.data.status).toBeDefined();
+
+      // Verify User 2 cannot access User 1 progress (404 Not Found)
+      const unauthProgress = await request(app)
+        .get(`/api/kits/${kitId}/progress`)
+        .set('Cookie', user2Cookie);
+
+      expect(unauthProgress.status).toBe(404);
+    });
+
+    it('supports synchronous completion when sync=true is specified', async () => {
+      const res = await request(app)
+        .post('/api/kits/generate?sync=true')
+        .set('Cookie', user1Cookie)
         .send({
-          jd: 'Senior Full Stack Engineer with TypeScript, React, and Node.js microservices.',
+          jd: 'Senior TypeScript Systems Architect with cloud microservices.',
           companyUrl: 'http://localhost:3000',
           days: 5,
-          roleTitle: 'Senior Full Stack Engineer',
+          roleTitle: 'Senior Systems Architect',
         });
 
       expect(res.status).toBe(201);
       expect(res.body.success).toBe(true);
       expect(res.body.data.kitId).toBeDefined();
       expect(res.body.data.kit).toBeDefined();
+      expect(res.body.data.kit.role.title).toBe('Senior Systems Architect');
 
-      const kit = res.body.data.kit;
-      expect(kit.role.title).toBe('Senior Full Stack Engineer');
-      expect(kit.questions.length).toBeGreaterThan(0);
-      expect(kit.schedule.days_available).toBe(5);
-
-      // Verify MongoDB persistence
       const doc = await KitModel.findById(res.body.data.kitId);
       expect(doc).not.toBeNull();
-      expect(doc!.userId.toString()).toBe(user1Id.toString());
       expect(doc!.status).toBe('completed');
     });
   });

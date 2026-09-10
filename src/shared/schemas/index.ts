@@ -13,7 +13,7 @@ export type { Source } from './source.schema';
 export type { CompanyBrief } from './company-brief.schema';
 export type { Requirement } from './requirement.schema';
 export type { Role } from './role.schema';
-export type { Question } from './question.schema';
+export type { Question, QuestionCategory } from './question.schema';
 export type { Flashcard } from './flashcard.schema';
 export type { Day, Schedule } from './schedule.schema';
 export type { Coverage } from './coverage.schema';

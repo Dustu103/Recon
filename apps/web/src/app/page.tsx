@@ -45,6 +45,7 @@ export default function HomePage() {
               <>
                 <Link
                   href="/register"
+                  prefetch={true}
                   className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-base transition-all shadow-lg shadow-emerald-500/20"
                 >
                   <span>Start Free Prep</span>
@@ -52,6 +53,7 @@ export default function HomePage() {
                 </Link>
                 <Link
                   href="/login"
+                  prefetch={true}
                   className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-xl text-base border border-slate-800 transition-colors"
                 >
                   <span>Sign In</span>

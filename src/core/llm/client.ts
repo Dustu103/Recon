@@ -84,7 +84,7 @@ export class LlmClient {
     // 2. Ensure at least one live provider is available
     if (!this.primaryProvider && !this.fallbackProvider) {
       throw new TaroError(
-        ErrorCode.LLM_PROVIDER_ERROR,
+        ErrorCode.INTERNAL_ERROR,
         'No active LLM providers configured. Set GEMINI_API_KEY or GROQ_API_KEY.'
       );
     }
@@ -115,7 +115,7 @@ export class LlmClient {
           return fallbackRes;
         } catch (fallbackErr) {
           throw new TaroError(
-            ErrorCode.LLM_PROVIDER_ERROR,
+            ErrorCode.INTERNAL_ERROR,
             `All live LLM providers failed. Primary: ${(primaryErr as Error).message}; Fallback: ${(fallbackErr as Error).message}`,
             fallbackErr
           );
@@ -124,7 +124,7 @@ export class LlmClient {
 
       // If no fallback was available, bubble typed error (NEVER fall through to mock!)
       throw new TaroError(
-        ErrorCode.LLM_PROVIDER_ERROR,
+        ErrorCode.INTERNAL_ERROR,
         `LLM completion failed on ${activePrimary.name}: ${(primaryErr as Error).message}`,
         primaryErr
       );

@@ -56,3 +56,6 @@ export {
   buildCoverage,
 } from './pipeline/kit-orchestrator';
 export type { GenerateKitParams } from './pipeline/kit-orchestrator';
+
+// Deterministic Logic Subsystem (Domain 4)
+export * from './deterministic';

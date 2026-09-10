@@ -51,20 +51,80 @@ function KitWorkspaceContent() {
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
 
+  // Live generation polling state for pending/in-progress kits
+  const [pollProgress, setPollProgress] = useState<{
+    percent: number;
+    step: string;
+    message: string;
+    status: string;
+  } | null>(null);
+
   useEffect(() => {
+    let timer: NodeJS.Timeout | null = null;
+    let cancelled = false;
+
+    async function pollUntilReady() {
+      try {
+        const p = await kitsApi.getProgress(kitId);
+        if (cancelled) return;
+
+        setPollProgress({
+          percent: p.percent,
+          step: p.step,
+          message: p.message,
+          status: p.status,
+        });
+
+        if (p.completed || p.status === 'completed') {
+          const freshKit = await kitsApi.get(kitId);
+          if (!cancelled) {
+            setKitDetail(freshKit);
+          }
+          return;
+        }
+
+        if (p.status === 'failed') {
+          setError(
+            typeof p.error === 'object' && p.error?.message
+              ? p.error.message
+              : typeof p.error === 'string'
+              ? p.error
+              : 'Kit generation failed.'
+          );
+          return;
+        }
+
+        timer = setTimeout(pollUntilReady, 2500);
+      } catch (err: any) {
+        if (!cancelled) {
+          setError(err.message || 'Failed to poll kit generation progress.');
+        }
+      }
+    }
+
     async function loadKit() {
       if (!kitId) return;
       try {
         setLoading(true);
         const data = await kitsApi.get(kitId);
         setKitDetail(data);
+
+        if (data.status !== 'completed' && data.status !== 'failed') {
+          pollUntilReady();
+        }
       } catch (err: any) {
         setError(err.message || 'Failed to load interview preparation kit.');
       } finally {
         setLoading(false);
       }
     }
+
     loadKit();
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
   }, [kitId]);
 
   if (loading) {
@@ -75,6 +135,88 @@ function KitWorkspaceContent() {
           <div className="text-center space-y-3">
             <Loader2 className="w-8 h-8 text-emerald-400 animate-spin mx-auto" />
             <p className="text-xs text-slate-400 font-mono">Loading your preparation kit workspace...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Handle in-progress generation if opened directly
+  if (kitDetail && kitDetail.status !== 'completed' && kitDetail.status !== 'failed') {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+        <Navbar />
+        <div className="flex-1 max-w-2xl mx-auto px-4 py-24 w-full">
+          <div className="bg-slate-900 border border-emerald-500/30 rounded-2xl p-8 space-y-6 shadow-2xl shadow-emerald-500/5">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center">
+                <Loader2 className="w-5 h-5 animate-spin" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-white">Kit Generation in Progress</h2>
+                <p className="text-xs text-slate-400 font-mono">
+                  {kitDetail.title || 'Assembling personalized interview kit'}
+                </p>
+              </div>
+            </div>
+
+            {/* Progress bar */}
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs font-mono">
+                <span className="text-slate-400">Pipeline Status</span>
+                <span className="text-emerald-400 font-bold">{pollProgress?.percent || 15}%</span>
+              </div>
+              <div className="w-full bg-slate-950 rounded-full h-3 overflow-hidden border border-slate-800">
+                <div
+                  className="bg-gradient-to-r from-emerald-500 to-teal-400 h-3 rounded-full transition-all duration-500"
+                  style={{ width: `${pollProgress?.percent || 15}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Live Message */}
+            <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs text-slate-300 font-mono flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>{pollProgress?.message || 'Executing reconnaissance and question synthesis...'}</span>
+            </div>
+
+            <p className="text-[11px] text-slate-500 text-center">
+              This page automatically refreshes into the interactive workspace once completed.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Handle failure
+  if (kitDetail?.status === 'failed') {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+        <Navbar />
+        <div className="flex-1 max-w-lg mx-auto px-4 py-24 text-center space-y-5">
+          <AlertCircle className="w-12 h-12 text-rose-400 mx-auto" />
+          <h2 className="text-xl font-bold text-white">Kit Generation Failed</h2>
+          <p className="text-sm text-slate-400 font-mono">
+            {typeof kitDetail.error === 'object' && kitDetail.error?.message
+              ? kitDetail.error.message
+              : typeof kitDetail.error === 'string'
+              ? kitDetail.error
+              : error || 'An unexpected error occurred during kit generation.'}
+          </p>
+          <div className="flex items-center justify-center gap-3">
+            <Link
+              href="/kits/new"
+              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl transition-all"
+            >
+              Try Again
+            </Link>
+            <Link
+              href="/dashboard"
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-medium text-xs rounded-xl transition-all"
+            >
+              Back to Dashboard
+            </Link>
           </div>
         </div>
       </div>
@@ -419,7 +561,7 @@ function KitWorkspaceContent() {
                             Suggested Answer Outline
                           </h5>
                           <p className="text-xs text-slate-300 leading-relaxed p-4 bg-slate-950 rounded-xl border border-slate-800 whitespace-pre-wrap font-sans">
-                            {q.suggested_answer}
+                            {q.answer_outline || q.suggested_answer}
                           </p>
                         </div>
 

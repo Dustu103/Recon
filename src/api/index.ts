@@ -120,11 +120,14 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   });
 });
 
+import { startStaleReaper } from './kits/services/stale-reaper.service';
+
 const PORT = serverEnv?.PORT ?? (process.env.PORT ? parseInt(process.env.PORT, 10) : 4000);
 
 if (process.env.NODE_ENV !== 'test') {
   connectDatabase()
     .then(() => {
+      startStaleReaper();
       app.listen(PORT, () => {
         console.log(`[Taro Server] listening on http://localhost:${PORT}`);
       });

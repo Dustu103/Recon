@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../../hooks/use-auth';
 import { ApiClientError } from '../../../lib/api';
-import { Sparkles, AlertCircle, ArrowRight, Lock, Mail } from 'lucide-react';
+import { Sparkles, AlertCircle, ArrowRight, Lock, Mail, Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -13,25 +13,32 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isRedirecting = React.useRef(false);
 
   // If already logged in, redirect to dashboard
   useEffect(() => {
-    if (!isAuthLoading && user) {
+    if (!isAuthLoading && user && !isRedirecting.current) {
+      isRedirecting.current = true;
       router.replace('/dashboard');
     }
   }, [user, isAuthLoading, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting || isRedirecting.current) return;
     setError(null);
     setIsSubmitting(true);
 
     try {
       await login(email, password);
-      router.push('/dashboard');
+      isRedirecting.current = true;
+      router.replace('/dashboard');
     } catch (err: unknown) {
+      setIsSubmitting(false);
+      isRedirecting.current = false;
       if (err instanceof ApiClientError) {
         if (err.code === 'INVALID_CREDENTIALS') {
           setError('Invalid email or password. Please try again.');
@@ -45,8 +52,6 @@ export default function LoginPage() {
       } else {
         setError('An unexpected error occurred. Please try again.');
       }
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -114,14 +119,22 @@ export default function LoginPage() {
                   <Lock className="w-4 h-4" />
                 </div>
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all text-sm"
+                  className="w-full pl-10 pr-10 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all text-sm"
                   autoComplete="current-password"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-500 hover:text-slate-300 transition-colors"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             </div>
 

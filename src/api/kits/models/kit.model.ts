@@ -1,6 +1,45 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 import { Kit } from '@taro/shared';
 
+export type KitStatus =
+  | 'pending'
+  | 'crawling'
+  | 'extracting'
+  | 'generating'
+  | 'scheduling'
+  | 'completed'
+  | 'failed';
+
+export interface IKitCheckpoints {
+  research?: {
+    companyName?: string;
+    pagesCrawled?: number;
+    techStack?: string[];
+  };
+  role?: {
+    title?: string;
+    seniority?: string;
+    requirementsCount?: number;
+  };
+  brief?: {
+    companyBrief?: string;
+    mission?: string;
+  };
+  questionCount?: number;
+  coverage?: {
+    uncoveredCount?: number;
+    passes?: number;
+  };
+  scheduleDays?: number;
+}
+
+export interface IKitError {
+  code: string;
+  message: string;
+  step?: string;
+  occurredAt?: Date;
+}
+
 export interface IKit extends Document {
   _id: mongoose.Types.ObjectId;
   userId: mongoose.Types.ObjectId;
@@ -10,9 +49,11 @@ export interface IKit extends Document {
   roleTitle: string;
   days: number;
   jobDescription: string;
+  inputHash?: string | null;
   kit: Kit | null;
-  status: 'generating' | 'completed' | 'failed';
-  error?: string | null;
+  status: KitStatus;
+  checkpoints?: IKitCheckpoints;
+  error?: IKitError | string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -53,17 +94,34 @@ const kitSchema = new Schema<IKit>(
       type: String,
       default: '',
     },
+    inputHash: {
+      type: String,
+      default: null,
+      index: true,
+    },
     kit: {
       type: Schema.Types.Mixed,
       default: null,
     },
     status: {
       type: String,
-      enum: ['generating', 'completed', 'failed'],
-      default: 'completed',
+      enum: [
+        'pending',
+        'crawling',
+        'extracting',
+        'generating',
+        'scheduling',
+        'completed',
+        'failed',
+      ],
+      default: 'pending',
+    },
+    checkpoints: {
+      type: Schema.Types.Mixed,
+      default: {},
     },
     error: {
-      type: String,
+      type: Schema.Types.Mixed,
       default: null,
     },
   },
@@ -76,5 +134,12 @@ const kitSchema = new Schema<IKit>(
 // Compound index for fast tenant kit querying sorted by recency
 kitSchema.index({ userId: 1, createdAt: -1 });
 
+// Compound index for duplicate generation detection (userId + inputHash + status)
+kitSchema.index({ userId: 1, inputHash: 1, status: 1 });
+
+// Compound index for stale-job reaper sweeping
+kitSchema.index({ status: 1, updatedAt: 1 });
+
 export const KitModel: Model<IKit> =
   (mongoose.models.Kit as Model<IKit>) || mongoose.model<IKit>('Kit', kitSchema);
+

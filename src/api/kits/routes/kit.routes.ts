@@ -2,8 +2,8 @@ import { Router, Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
 import { requireAuth } from '../../auth/middleware/require-auth';
 import { KitModel } from '../models/kit.model';
-import { JobOpportunityModel } from '../../jobs/models/job-opportunity.model';
-import { sanitizeJobUrl } from '@/core/crawler/job-sanitizer';
+import { KitLifecycleService } from '../services/kit-lifecycle.service';
+import { getUserKitById } from '../services/kit-scoping';
 import { generateKit } from '@/core';
 import { TaroError, ErrorCode } from '@/shared';
 
@@ -11,8 +11,11 @@ export const kitRouter = Router();
 
 /**
  * POST /api/kits/generate
- * Generates an end-to-end interview prep kit from Job Description, Company URL, and Days.
- * Supports both SSE streaming (when stream=true or Accept: text/event-stream) and standard JSON.
+ * Initiates an end-to-end interview prep kit generation.
+ * D5 Primary Model: Returns 202 Accepted immediately with kitId and progressUrl.
+ * The client polls GET /api/kits/:id/progress every 2-4 seconds.
+ * Deduplication: Returns existing kitId if an active identical generation already exists.
+ * (Optional ?sync=true query parameter allows synchronous awaiting for testing/scripts).
  */
 kitRouter.post('/generate', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -35,91 +38,99 @@ kitRouter.post('/generate', requireAuth, async (req: Request, res: Response, nex
       );
     }
 
-    const isStream =
-      req.query.stream === 'true' ||
-      Boolean(req.headers.accept?.includes('text/event-stream'));
+    const isSync = req.query.sync === 'true';
 
-    if (isStream) {
-      res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Connection', 'keep-alive');
-      res.flushHeaders?.();
+    // 1. Create or get existing active kit (Duplicate Submission Guard)
+    const { kitId, isExisting, status } = await KitLifecycleService.createOrGetPendingKit(
+      userId,
+      {
+        jd: jd.trim(),
+        companyUrl: companyUrl.trim(),
+        days: parsedDays,
+        roleTitle: typeof roleTitle === 'string' ? roleTitle.trim() : undefined,
+        jobUrl: typeof jobUrl === 'string' ? jobUrl.trim() : undefined,
+      }
+    );
 
-      const sendEvent = (event: string, data: unknown) => {
-        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-      };
-
-      try {
-        const kit = await generateKit({
-          jd: jd.trim(),
-          companyUrl: companyUrl.trim(),
-          days: parsedDays,
-          roleTitle: typeof roleTitle === 'string' ? roleTitle.trim() : undefined,
-          onProgress: (p) => {
-            sendEvent('progress', p);
+    // If synchronous mode is requested (e.g. test harness)
+    if (isSync) {
+      if (status === 'completed') {
+        const doc = await KitModel.findById(kitId).lean();
+        return res.status(200).json({
+          success: true,
+          data: {
+            kitId,
+            kit: doc?.kit,
+            isExisting: true,
           },
         });
-
-        const doc = await KitModel.create({
-          userId: new mongoose.Types.ObjectId(userId),
-          title: `${kit.role.title} at ${kit.source.company}`,
-          companyName: kit.source.company,
-          companyUrl: kit.source.company_url,
-          roleTitle: kit.role.title,
-          days: parsedDays,
-          jobDescription: jd.trim(),
-          kit,
-          status: 'completed',
-        });
-
-        sendEvent('complete', {
-          kitId: doc._id.toString(),
-          kit,
-        });
-
-        // Fire-and-forget record verified job opportunity for recommendations
-        recordOpportunityFromKit(kit, jd, jobUrl || companyUrl);
-
-        res.end();
-      } catch (err: any) {
-        sendEvent('error', {
-          code: err.code || 'GENERATION_FAILED',
-          message: err.message || 'Failed to generate kit',
-        });
-        res.end();
       }
-      return;
+
+      // Execute synchronously
+      const kit = await generateKit({
+        jd: jd.trim(),
+        companyUrl: companyUrl.trim(),
+        days: parsedDays,
+        roleTitle: typeof roleTitle === 'string' ? roleTitle.trim() : undefined,
+      });
+
+      await KitLifecycleService.completeKit(kitId, kit, jobUrl || companyUrl);
+
+      return res.status(201).json({
+        success: true,
+        data: {
+          kitId,
+          kit,
+        },
+      });
     }
 
-    // Standard JSON Response
-    const kit = await generateKit({
-      jd: jd.trim(),
-      companyUrl: companyUrl.trim(),
-      days: parsedDays,
-      roleTitle: typeof roleTitle === 'string' ? roleTitle.trim() : undefined,
-    });
+    // 2. Start background generation pipeline if it was newly created
+    if (!isExisting || status === 'pending') {
+      KitLifecycleService.startGeneration(kitId, userId, {
+        jd: jd.trim(),
+        companyUrl: companyUrl.trim(),
+        days: parsedDays,
+        roleTitle: typeof roleTitle === 'string' ? roleTitle.trim() : undefined,
+        jobUrl: typeof jobUrl === 'string' ? jobUrl.trim() : undefined,
+      });
+    }
 
-    const doc = await KitModel.create({
-      userId: new mongoose.Types.ObjectId(userId),
-      title: `${kit.role.title} at ${kit.source.company}`,
-      companyName: kit.source.company,
-      companyUrl: kit.source.company_url,
-      roleTitle: kit.role.title,
-      days: parsedDays,
-      jobDescription: jd.trim(),
-      kit,
-      status: 'completed',
-    });
-
-    // Fire-and-forget record verified job opportunity for recommendations
-    recordOpportunityFromKit(kit, jd, jobUrl || companyUrl);
-
-    return res.status(201).json({
+    // 3. Return 202 Accepted with polling URL
+    return res.status(202).json({
       success: true,
       data: {
-        kitId: doc._id.toString(),
-        kit,
+        kitId,
+        status: status || 'pending',
+        isExisting,
+        progressUrl: `/api/kits/${kitId}/progress`,
       },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/kits/:id/progress
+ * High-frequency polling endpoint (recommended: every 2-4 seconds).
+ * Reads from fast in-memory map if available; falls back to durable Mongo state.
+ * Strictly scopes ownership to authenticated user (404 on unowned).
+ */
+kitRouter.get('/:id/progress', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.id;
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new TaroError(ErrorCode.NOT_FOUND, 'Kit not found');
+    }
+
+    const progress = await KitLifecycleService.getKitProgress(id, userId);
+
+    return res.status(200).json({
+      success: true,
+      data: progress,
     });
   } catch (err) {
     next(err);
@@ -134,7 +145,7 @@ kitRouter.get('/', requireAuth, async (req: Request, res: Response, next: NextFu
   try {
     const userId = req.user!.id;
     const kits = await KitModel.find({ userId: new mongoose.Types.ObjectId(userId) })
-      .select('_id title companyName companyUrl roleTitle days status createdAt updatedAt')
+      .select('_id title companyName companyUrl roleTitle days status checkpoints error createdAt updatedAt')
       .sort({ createdAt: -1 })
       .lean();
 
@@ -149,25 +160,15 @@ kitRouter.get('/', requireAuth, async (req: Request, res: Response, next: NextFu
 
 /**
  * GET /api/kits/:id
- * Fetches a single kit by ID, scoped to the authenticated user.
+ * Fetches a single kit by ID, scoped strictly to the authenticated user.
+ * If generation is still pending/in-progress, returns 200 with partial state.
  */
 kitRouter.get('/:id', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user!.id;
     const { id } = req.params;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      throw new TaroError(ErrorCode.INVALID_INPUT, 'Invalid kit ID format');
-    }
-
-    const doc = await KitModel.findOne({
-      _id: new mongoose.Types.ObjectId(id),
-      userId: new mongoose.Types.ObjectId(userId),
-    }).lean();
-
-    if (!doc) {
-      throw new TaroError(ErrorCode.KIT_NOT_FOUND, 'Kit not found');
-    }
+    const doc = await getUserKitById(id, userId);
 
     return res.status(200).json({
       success: true,
@@ -188,7 +189,7 @@ kitRouter.patch('/:id', requireAuth, async (req: Request, res: Response, next: N
     const { id } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      throw new TaroError(ErrorCode.INVALID_INPUT, 'Invalid kit ID format');
+      throw new TaroError(ErrorCode.NOT_FOUND, 'Kit not found');
     }
 
     const { kit, title } = req.body;
@@ -211,7 +212,7 @@ kitRouter.patch('/:id', requireAuth, async (req: Request, res: Response, next: N
     ).lean();
 
     if (!updated) {
-      throw new TaroError(ErrorCode.KIT_NOT_FOUND, 'Kit not found');
+      throw new TaroError(ErrorCode.NOT_FOUND, 'Kit not found');
     }
 
     return res.status(200).json({
@@ -225,7 +226,7 @@ kitRouter.patch('/:id', requireAuth, async (req: Request, res: Response, next: N
 
 /**
  * DELETE /api/kits/:id
- * Deletes a kit owned by the authenticated user.
+ * Deletes a kit owned by the authenticated user and removes memory tracking.
  */
 kitRouter.delete('/:id', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -233,7 +234,7 @@ kitRouter.delete('/:id', requireAuth, async (req: Request, res: Response, next: 
     const { id } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      throw new TaroError(ErrorCode.INVALID_INPUT, 'Invalid kit ID format');
+      throw new TaroError(ErrorCode.NOT_FOUND, 'Kit not found');
     }
 
     const deleted = await KitModel.findOneAndDelete({
@@ -242,8 +243,10 @@ kitRouter.delete('/:id', requireAuth, async (req: Request, res: Response, next: 
     });
 
     if (!deleted) {
-      throw new TaroError(ErrorCode.KIT_NOT_FOUND, 'Kit not found');
+      throw new TaroError(ErrorCode.NOT_FOUND, 'Kit not found');
     }
+
+    KitLifecycleService._clearInMemorySnapshot(id);
 
     return res.status(200).json({
       success: true,
@@ -253,42 +256,3 @@ kitRouter.delete('/:id', requireAuth, async (req: Request, res: Response, next: 
     next(err);
   }
 });
-
-/**
- * Asynchronously records or upserts verified public job opportunities
- * to build up the recommendation feed for candidates.
- */
-function recordOpportunityFromKit(kit: any, jd: string, rawJobUrl?: string) {
-  try {
-    const urlToUse = rawJobUrl || kit.source?.company_url;
-    if (!urlToUse || typeof urlToUse !== 'string') return;
-    const cleanJobUrl = sanitizeJobUrl(urlToUse);
-    const cleanCompanyUrl = sanitizeJobUrl(kit.source?.company_url || cleanJobUrl);
-    if (!cleanJobUrl || cleanJobUrl.length < 5) return;
-
-    JobOpportunityModel.findOneAndUpdate(
-      { jobUrl: cleanJobUrl },
-      {
-        $set: {
-          title: kit.role?.title || 'Software Engineer',
-          companyName: kit.source?.company || 'Company',
-          companyUrl: cleanCompanyUrl,
-          descriptionSnippet: jd.trim().slice(0, 300),
-          seniority: kit.role?.seniority || undefined,
-          status: 'active',
-          verifiedAt: new Date(),
-        },
-        $setOnInsert: {
-          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7-day TTL
-          reportedClosedCount: 0,
-        },
-      },
-      { upsert: true, setDefaultsOnInsert: true }
-    ).catch(() => {
-      // Non-blocking fire-and-forget
-    });
-  } catch {
-    // Non-blocking
-  }
-}
-

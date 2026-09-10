@@ -3,7 +3,8 @@
  * Ingests crawled pages from Domain 2, enforces Top-K link-ranker page selection
  * within a 16,000 character context cap, and provides honest fallback when pages are unretrievable.
  */
-import { CompanyBrief, CompanyBriefSchema, CompanyResearchResult } from '@taro/shared';
+import { CompanyBrief, CompanyBriefSchema } from '@taro/shared';
+import { CompanyResearchResult } from '../crawler/types';
 import { getDefaultLlmClient } from '../llm/client';
 import { wrapUntrustedContext, PROMPT_INJECTION_INSTRUCTION } from '../llm/prompt-guard';
 import { parseAndValidateJson } from '../llm/json-parser';
@@ -129,7 +130,7 @@ export async function synthesizeCompanyBrief(
   const brief: CompanyBrief = {
     summary: rawParsed.summary.trim(),
     what_they_do: rawParsed.what_they_do.trim(),
-    sources: rawParsed.sources.length > 0 ? rawParsed.sources : pagesUsed,
+    sources: rawParsed.sources && rawParsed.sources.length > 0 ? rawParsed.sources : pagesUsed,
   };
 
   // Assert Appendix A schema conformance

@@ -92,14 +92,14 @@ npm run dev
 
 ## Verification & Testing
 
-Recon includes a hermetic test suite with **234 tests across 19 test suites** passing 100%:
+Recon includes a hermetic test suite with **314 tests across 36 test files** passing 100%:
 
 ```bash
-npm test              # Run all 234 unit & integration tests (~8.6s)
-npm run test:shared   # Test Appendix A schemas, error codes, ID generators (120 tests)
-npm run test:core     # Test crawler, SSRF shield, robots parser, research cache (68 tests)
-npm run test:api      # Test Express API, Redis OTP service, password reset, kit scoping (42 tests)
-npm run test:cli      # Test evaluation CLI runner (4 tests)
+npm test              # Run all 314 unit & integration tests (~26s)
+npm run test:shared   # Test Appendix A schemas, error codes, ID generators
+npm run test:core     # Test crawler, LLM pipeline, coverage checker, deterministic scheduler
+npm run test:api      # Test Express API, Redis OTP, auth routes, kit lifecycle & stale reaper
+npm run test:cli      # Test evaluation CLI runner
 ```
 
 ---
@@ -111,10 +111,10 @@ npm run test:cli      # Test evaluation CLI runner (4 tests)
 | **D0: Foundation** | Infrastructure & Contracts | **Complete** | Monorepo consolidation, Appendix A/B Zod schemas, 24 frozen error codes, monotonic ID generator, `.env` validator. |
 | **D1: Identity** | Auth, Sessions & Multi-Tenancy | **Complete** | Cookie-only auth (`taro_session`, `HttpOnly`, `SameSite=Lax`), 2-step Redis OTP email verification (5-min TTL), 15-min single-use password reset link, Resend API mailer, 8–72 char passwords, 2-tier rate limiting, timing attack defense, tenant isolation (strict 404). |
 | **D2: Research** | Crawler & Extraction | **Complete** | SSRF shield with Undici socket pinning, RFC 9309 robots compliance, HTML cleaner, dynamic link ranker, discussion notes retriever, quality gate. |
-| **D3: AI Generation** | LLM Pipeline Steps 1–4 | Up Next | Groq (`openai/gpt-oss-120b`) / Gemini pipeline, requirement extraction, tailored question rubrics, retry backoff. |
-| **D4: Deterministic** | Math & Scheduling | Pending | Greedy / linear programming schedule allocator, 2-pass coverage guarantee. |
-| **D5: Kit Lifecycle** | Persistence & Polling | Pending | MongoDB kit lifecycle, 4-second polling progress engine with durable step checkpoints. |
-| **D6: Builder** | Interactive Editor UI | Pending | Inline editing, sectional regenerations, monotonic ID preservation. |
+| **D3: AI Generation** | LLM Pipeline Steps 1–4 | **Complete** | Gemini 1.5 Flash & Groq fallback, schema-enforced JSON generation, prompt engineering for requirement extraction and role synthesis, retry backoff with jitter. |
+| **D4: Deterministic** | Math & Scheduling | **Complete** | Coverage checker distinguishing must vs. nice-to-have gaps, bounded 2-pass gap repair, difficulty-first study scheduler `(difficulty DESC, isMust DESC, id ASC)` preserving front-loading invariant. |
+| **D5: Kit Lifecycle** | Persistence, Polling & Resilience | **Complete** | 202 Accepted async dispatch, 2.5s HTTP polling progress engine, sub-millisecond in-memory cache with durable DB checkpoints, SHA-256 idempotent deduplication, crash-safe `failKit`, 15-min background stale reaper. |
+| **D6: Builder** | Interactive Editor UI | Up Next | Inline editing of questions/answers, sectional regenerations preserving manual edits, drag-and-drop reordering. |
 | **D7: Practice** | Mock Simulation | Pending | Audio transcription, AI interviewer follow-ups, depth rubric evaluation. |
 | **D8: Evaluation** | Appendix B Orchestration | Pending | Core pipeline wiring to `npm run evaluate`. |
 | **D9: Release** | Production Hardening | Pending | Containerization, deployment guides, smoke tests. |
@@ -126,5 +126,14 @@ npm run test:cli      # Test evaluation CLI runner (4 tests)
 - [docs/monorepo.md](file:///d:/Prorgram/Project/taro/docs/monorepo.md): Monorepo structure, domain boundaries, and import invariants.
 - [docs/schema.md](file:///d:/Prorgram/Project/taro/docs/schema.md): Appendix A & B schema contracts, referential integrity rules, and Canonical Error Registry.
 - [docs/auth.md](file:///d:/Prorgram/Project/taro/docs/auth.md): Authentication endpoints, cookie specs, session format, and frontend architecture.
+- [docs/crawler.md](file:///d:/Prorgram/Project/taro/docs/crawler.md): Deep careers crawler, SSRF socket pinning, and RFC 9309 robots parser.
+- [docs/deterministic.md](file:///d:/Prorgram/Project/taro/docs/deterministic.md): Deterministic math, 2-pass gap repair, and study schedule front-loading proofs.
+- [docs/kit-lifecycle.md](file:///d:/Prorgram/Project/taro/docs/kit-lifecycle.md): Kit lifecycle engine, 202 async generation, 2.5s HTTP polling, and stale reaper.
 - [docs/security.md](file:///d:/Prorgram/Project/taro/docs/security.md): Security controls, threat models, Redis OTP verification, and explicit architectural trade-offs.
-- [docs/architecture/decisions/001-caching-and-trending-strategy.md](file:///d:/Prorgram/Project/taro/docs/architecture/decisions/001-caching-and-trending-strategy.md): Architecture Decision Record (ADR) on Company Research Caching vs. Full-Kit Caching & Trending Strategy.
+- [docs/operations/environment.md](file:///d:/Prorgram/Project/taro/docs/operations/environment.md): Environment variable specifications and secret management.
+- [docs/operations/runbook.md](file:///d:/Prorgram/Project/taro/docs/operations/runbook.md): Developer runbook, Docker commands, test workflows, and batch evaluation.
+- [docs/architecture/decisions/001-caching-and-trending-strategy.md](file:///d:/Prorgram/Project/taro/docs/architecture/decisions/001-caching-and-trending-strategy.md): ADR-001 on Company Research Caching vs. Full-Kit Caching & Trending Strategy.
+- [docs/architecture/decisions/002-d3-llm-pipeline-architecture.md](file:///d:/Prorgram/Project/taro/docs/architecture/decisions/002-d3-llm-pipeline-architecture.md): ADR-002 on D3 LLM Pipeline Architecture, provider fallback, and prompt engineering.
+- [docs/architecture/decisions/003-d4-deterministic-logic-architecture.md](file:///d:/Prorgram/Project/taro/docs/architecture/decisions/003-d4-deterministic-logic-architecture.md): ADR-003 on D4 Deterministic Logic Architecture, sort keys, and gap repair.
+- [docs/architecture/decisions/004-d5-kit-lifecycle-resilience.md](file:///d:/Prorgram/Project/taro/docs/architecture/decisions/004-d5-kit-lifecycle-resilience.md): ADR-004 on D5 Kit Lifecycle, Persistence, Polling Engine, and Resilience.
+

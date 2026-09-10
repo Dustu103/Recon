@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { synthesizeCompanyBrief } from '../../step2-brief';
-import { CompanyResearchResult } from '@taro/shared';
+import { CompanyResearchResult } from '../../../crawler/types';
 
 describe('Step 2: Company Brief Synthesizer', () => {
   it('returns honest degradation fallback when crawled pages is empty', async () => {

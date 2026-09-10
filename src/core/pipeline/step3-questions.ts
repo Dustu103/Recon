@@ -196,7 +196,7 @@ export async function generateQuestionsForRequirements(
           category,
           prompt: q.prompt.trim(),
           answer_outline: q.answer_outline.trim(),
-          difficulty: q.difficulty,
+          difficulty: (q.difficulty === 1 || q.difficulty === 2 || q.difficulty === 3 ? q.difficulty : 2),
         };
 
         QuestionSchema.parse(question);

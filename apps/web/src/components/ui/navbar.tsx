@@ -28,8 +28,10 @@ export function Navbar() {
           </span>
         </Link>
 
-        <div className="flex items-center gap-4">
-          {!isLoading && user ? (
+        <div className="flex items-center gap-4 min-h-[36px]">
+          {isLoading ? (
+            <div className="h-8 w-36 rounded-lg bg-slate-900/50 animate-pulse" />
+          ) : user ? (
             <div className="flex items-center gap-3">
               <Link
                 href="/dashboard"
@@ -50,22 +52,24 @@ export function Navbar() {
                 <span>Logout</span>
               </button>
             </div>
-          ) : !isLoading ? (
+          ) : (
             <div className="flex items-center gap-2">
               <Link
                 href="/login"
+                prefetch={true}
                 className="text-sm font-medium text-slate-300 hover:text-white px-3.5 py-1.5 rounded-lg hover:bg-slate-900 transition-colors"
               >
                 Sign In
               </Link>
               <Link
                 href="/register"
+                prefetch={true}
                 className="text-sm font-medium bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-3.5 py-1.5 rounded-lg font-semibold transition-colors shadow-sm shadow-emerald-500/20"
               >
                 Get Started
               </Link>
             </div>
-          ) : null}
+          )}
         </div>
       </div>
     </header>

@@ -14,7 +14,7 @@ export class GroqProvider implements LlmProvider {
   constructor(apiKey?: string, modelName?: string) {
     const key = apiKey || process.env.GROQ_API_KEY;
     if (!key) {
-      throw new TaroError(ErrorCode.LLM_PROVIDER_ERROR, 'GROQ_API_KEY is not configured');
+      throw new TaroError(ErrorCode.INTERNAL_ERROR, 'GROQ_API_KEY is not configured');
     }
     this.client = new Groq({ apiKey: key });
     this.defaultModel = modelName || process.env.GROQ_MODEL || 'openai/gpt-oss-120b';

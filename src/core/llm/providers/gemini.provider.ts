@@ -14,10 +14,10 @@ export class GeminiProvider implements LlmProvider {
   constructor(apiKey?: string, modelName?: string) {
     const key = apiKey || process.env.GEMINI_API_KEY;
     if (!key) {
-      throw new TaroError(ErrorCode.LLM_PROVIDER_ERROR, 'GEMINI_API_KEY is not configured');
+      throw new TaroError(ErrorCode.INTERNAL_ERROR, 'GEMINI_API_KEY is not configured');
     }
     this.client = new GoogleGenerativeAI(key);
-    this.defaultModel = modelName || process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+    this.defaultModel = modelName || process.env.GEMINI_MODEL || 'gemini-1.5-flash';
   }
 
   public async complete(prompt: string, options: LlmRequestOptions = {}): Promise<LlmResponse> {

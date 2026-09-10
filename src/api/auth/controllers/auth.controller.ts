@@ -85,6 +85,8 @@ export async function login(req: Request, res: Response, next: NextFunction): Pr
     const { email, password } = parseResult.data;
     const user = await UserModel.findOne({ email });
 
+    console.log(`[Auth Login] Attempt for email="${email}", userFound=${!!user}`);
+
     if (!user) {
       // Execute dummy comparison to ensure constant-time response (timing attack mitigation)
       await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
@@ -92,6 +94,8 @@ export async function login(req: Request, res: Response, next: NextFunction): Pr
     }
 
     const isMatch = await user.comparePassword(password);
+    console.log(`[Auth Login] Password check for email="${email}": match=${isMatch}`);
+
     if (!isMatch) {
       throw new TaroError(ErrorCode.INVALID_CREDENTIALS, 'Invalid email or password');
     }
