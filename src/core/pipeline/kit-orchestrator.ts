@@ -120,7 +120,10 @@ export async function generateKit(params: GenerateKitParams): Promise<Kit> {
 
   const research = await crawlCompany(companyUrl.trim(), {
     maxPages: 5,
-    allowLocalhost: mock || process.env.NODE_ENV === 'test',
+    allowLocalhost:
+      mock ||
+      process.env.NODE_ENV === 'test' ||
+      process.env.TARO_CLI_MODE === 'evaluate',
   });
 
   // ── Step 3: Synthesize Role-Grounded Company Brief ──────────────────────────

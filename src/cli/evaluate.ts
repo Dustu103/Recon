@@ -1,12 +1,14 @@
 /**
- * Section 9 — Batch Evaluation Entry Point
- * Command: npm run evaluate -- --input <cases.json> --output <kits.json>
+ * Section 9 — Batch Evaluation Entry Point (Domain 8)
+ * Command: npm run evaluate -- --input <cases.json> --output <kits.json> [--mock]
  *
  * Requirements:
  *  - Reads an array of cases (each with id, jd, company_url, days).
- *  - Evaluates each case individually.
+ *  - Evaluates each case individually with full pipeline isolation.
  *  - Continues after one case fails, recording the failure rather than aborting the run.
- *  - Writes single JSON file in Appendix B shape.
+ *  - Supports localhost URLs in evaluate mode (TARO_CLI_MODE = 'evaluate').
+ *  - Supports optional --mock flag for offline, fast autograder evaluation.
+ *  - Validates and writes single JSON file strictly conforming to Appendix B shape.
  */
 import fs from 'fs';
 import path from 'path';
@@ -18,8 +20,20 @@ import {
   ErrorCode,
   TaroError,
 } from '@taro/shared';
+import { generateKit } from '@/core';
 
-export async function runEvaluate(inputPath: string, outputPath: string): Promise<void> {
+// Ensure evaluate mode is active so url-validator permits localhost URLs
+process.env.TARO_CLI_MODE = 'evaluate';
+
+export interface EvaluateOptions {
+  mock?: boolean;
+}
+
+export async function runEvaluate(
+  inputPath: string,
+  outputPath: string,
+  options?: EvaluateOptions
+): Promise<void> {
   const resolvedInput = path.resolve(process.cwd(), inputPath);
   const resolvedOutput = path.resolve(process.cwd(), outputPath);
 
@@ -38,9 +52,11 @@ export async function runEvaluate(inputPath: string, outputPath: string): Promis
     throw new TaroError(ErrorCode.INVALID_INPUT, 'Input cases file must contain a top-level JSON array.');
   }
 
-  console.log(`[Taro Evaluate] Loaded ${rawData.length} raw case(s) from ${inputPath}`);
+  const isMock = Boolean(options?.mock);
+  console.log(`[Taro Evaluate] Loaded ${rawData.length} raw case(s) from ${inputPath} (mock: ${isMock})`);
 
   const kits: BatchKitEntry[] = [];
+  const startTime = Date.now();
 
   for (let index = 0; index < rawData.length; index++) {
     const rawCase = rawData[index];
@@ -56,7 +72,7 @@ export async function runEvaluate(inputPath: string, outputPath: string): Promis
         .map((e) => `[${e.path.join('.') || 'root'}] ${e.message}`)
         .join('; ');
 
-      console.warn(`[Taro Evaluate] Case "${caseId}" failed input validation: ${errorMsg}`);
+      console.warn(`[Taro Evaluate] [${index + 1}/${rawData.length}] Case "${caseId}" failed input validation: ${errorMsg}`);
 
       kits.push({
         id: caseId,
@@ -71,18 +87,48 @@ export async function runEvaluate(inputPath: string, outputPath: string): Promis
     }
 
     const validCase = validation.data;
+    console.log(`[Taro Evaluate] [${index + 1}/${rawData.length}] Processing case "${validCase.id}" (${validCase.company_url}, ${validCase.days} days)...`);
 
-    // Process valid case (generateKit from @taro/core will be connected in D8)
-    kits.push({
-      id: validCase.id,
-      status: 'failed',
-      kit: null,
-      error: {
-        code: ErrorCode.CASE_FAILED,
-        message: 'Core generation pipeline pending implementation (Milestone D2-D5).',
-      },
-    });
+    try {
+      const generatedKit = await generateKit({
+        jd: validCase.jd,
+        companyUrl: validCase.company_url,
+        days: validCase.days,
+        mock: isMock,
+        onProgress: (prog) => {
+          console.log(`[Taro Evaluate] [${validCase.id}] ${prog.step} (${prog.percent}%): ${prog.message}`);
+        },
+      });
+
+      kits.push({
+        id: validCase.id,
+        status: 'ok',
+        kit: generatedKit,
+        error: null,
+      });
+
+      console.log(`[Taro Evaluate] [${validCase.id}] Generation completed successfully.`);
+    } catch (err: any) {
+      console.error(`[Taro Evaluate] [${validCase.id}] Failed generation:`, err?.message || err);
+
+      const code =
+        err instanceof TaroError && err.code ? err.code : ErrorCode.CASE_FAILED;
+
+      kits.push({
+        id: validCase.id,
+        status: 'failed',
+        kit: null,
+        error: {
+          code,
+          message: err?.message || 'Case generation failed',
+        },
+      });
+    }
   }
+
+  const elapsedSecs = ((Date.now() - startTime) / 1000).toFixed(1);
+  const okCount = kits.filter((k) => k.status === 'ok').length;
+  const failCount = kits.filter((k) => k.status === 'failed').length;
 
   const outputPayload = {
     version: '1.0' as const,
@@ -96,24 +142,28 @@ export async function runEvaluate(inputPath: string, outputPath: string): Promis
   fs.mkdirSync(path.dirname(resolvedOutput), { recursive: true });
   fs.writeFileSync(resolvedOutput, JSON.stringify(outputPayload, null, 2), 'utf8');
 
-  console.log(`[Taro Evaluate] Successfully evaluated ${kits.length} case(s) -> ${outputPath}`);
+  console.log(
+    `[Taro Evaluate] Finished: ${kits.length} case(s) evaluated in ${elapsedSecs}s (${okCount} succeeded, ${failCount} failed) -> ${outputPath}`
+  );
 }
 
 async function main(): Promise<void> {
   const args = minimist(process.argv.slice(2), {
     string: ['input', 'output'],
-    alias: { i: 'input', o: 'output' },
+    boolean: ['mock'],
+    alias: { i: 'input', o: 'output', m: 'mock' },
   });
 
   const inputPath = args.input;
   const outputPath = args.output;
+  const isMock = Boolean(args.mock);
 
   if (!inputPath || !outputPath) {
-    console.error('Usage: npm run evaluate -- --input <cases.json> --output <kits.json>');
+    console.error('Usage: npm run evaluate -- --input <cases.json> --output <kits.json> [--mock]');
     process.exit(1);
   }
 
-  await runEvaluate(inputPath, outputPath);
+  await runEvaluate(inputPath, outputPath, { mock: isMock });
 }
 
 // Run CLI when called directly

@@ -116,7 +116,7 @@ npm run test:cli      # Test evaluation CLI runner
 | **D5: Kit Lifecycle** | Persistence, Polling & Resilience | **Complete** | 202 Accepted async dispatch, 2.5s HTTP polling progress engine, sub-millisecond in-memory cache with durable DB checkpoints, SHA-256 idempotent deduplication, crash-safe `failKit`, 15-min background stale reaper. |
 | **D6: Builder** | Interactive Editor & Regeneration | **Complete** | Granular inline editing for questions/brief/flashcards, manual additions (`_manual`), non-destructive reordering, single-section regeneration with protected item preservation, singleton confirmation gate (`428 CONFIRMATION_REQUIRED`), OCC versioning (`409 CONCURRENT_MODIFICATION`), and candidate progress tracking. |
 | **D7: Practice & Creative Feature** | Flashcards, Spaced Repetition & Radar | **Complete** | Distraction-free study deck (Spacebar 3D flip, ergonomic hotkeys 1-3/arrows), 3-tier confidence rating persistence in MongoDB `practiceHistory[]`, confidence-weighted spaced repetition urgency queue with infinite unpracticed weight and temporal decay, signature Weak-Spot Gap Radar linking recall back to JD requirements with zero-overstatement guarantee, strict Danger Zone alert banner on unpracticed must-haves, and amber warning pills on partial practice. |
-| **D8: Evaluation** | Appendix B Orchestration | Pending | Core pipeline wiring to `npm run evaluate`. |
+| **D8: Evaluation** | Appendix B Orchestration | **Complete** | Batch evaluation CLI runner (`npm run evaluate`), Appendix B schema compliance, per-case fault isolation, localhost autograder support (`TARO_CLI_MODE='evaluate'`), hermetic `--mock` flag for offline evaluation. |
 | **D9: Release** | Production Hardening | Pending | Containerization, deployment guides, smoke tests. |
 
 ---
@@ -125,6 +125,7 @@ npm run test:cli      # Test evaluation CLI runner
 
 - [docs/monorepo.md](file:///d:/Prorgram/Project/taro/docs/monorepo.md): Monorepo structure, domain boundaries, and import invariants.
 - [docs/schema.md](file:///d:/Prorgram/Project/taro/docs/schema.md): Appendix A & B schema contracts, referential integrity rules, and Canonical Error Registry.
+- [docs/cli.md](file:///d:/Prorgram/Project/taro/docs/cli.md): Domain 8 Batch Evaluation CLI runner, Appendix B schema specification, and rate-limit arithmetic.
 - [docs/auth.md](file:///d:/Prorgram/Project/taro/docs/auth.md): Authentication endpoints, cookie specs, session format, and frontend architecture.
 - [docs/crawler.md](file:///d:/Prorgram/Project/taro/docs/crawler.md): Deep careers crawler, SSRF socket pinning, and RFC 9309 robots parser.
 - [docs/deterministic.md](file:///d:/Prorgram/Project/taro/docs/deterministic.md): Deterministic math, 2-pass gap repair, and study schedule front-loading proofs.
