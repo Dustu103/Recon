@@ -19,4 +19,21 @@ export type { Day, Schedule } from './schedule.schema';
 export type { Coverage } from './coverage.schema';
 export type { Kit, BatchOutput, BatchKitEntry, BatchInputCase } from './kit.schema';
 export type { RegisterInput, LoginInput, UserPayload } from './auth.schema';
-
+export {
+  PracticeConfidenceSchema,
+  PracticeRatingItemSchema,
+  PracticeSessionInputSchema,
+  CONFIDENCE_MAP,
+  LABEL_TO_CONFIDENCE,
+} from './practice.schema';
+export type {
+  PracticeConfidence,
+  ConfidenceLabel,
+  PracticeRatingItem,
+  PracticeSessionInput,
+  PracticeHistoryEntry,
+  SpacedRepetitionFilter,
+  SpacedRepetitionCard,
+  RequirementReadiness,
+  WeakSpotRadarAnalysis,
+} from './practice.schema';

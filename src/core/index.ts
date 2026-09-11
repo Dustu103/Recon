@@ -73,3 +73,9 @@ export type {
   RegenerateBriefResult,
   RegenerateFlashcardsResult,
 } from './builder/regeneration-engine';
+
+// Practice & Weak-Spot Radar Subsystem (Domain 7)
+export { getLatestRatingsMap, normalizeDate } from './practice/history-reducer';
+export type { ResolvedLatestRating } from './practice/history-reducer';
+export { buildSpacedRepetitionQueue } from './practice/spaced-repetition';
+export { calculateWeakSpotRadar } from './practice/weak-spot-radar';

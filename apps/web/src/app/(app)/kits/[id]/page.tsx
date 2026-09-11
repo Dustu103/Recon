@@ -7,6 +7,7 @@ import { ProtectedRoute } from '../../../../components/auth/protected-route';
 import { Navbar } from '../../../../components/ui/navbar';
 import { kitsApi, KitDetail, ApiClientError } from '../../../../lib/api';
 import { kitBuilderApi } from '../../../../lib/kit-builder';
+import { practiceApi, PracticeAnalyticsResponse } from '../../../../lib/practice-api';
 import { QuestionCategory } from '@taro/shared';
 import {
   Sparkles,
@@ -62,7 +63,7 @@ function KitWorkspaceContent() {
   // Candidate Progress tracking (D6-B)
   const [starredQuestions, setStarredQuestions] = useState<Set<string>>(new Set());
   const [completedDays, setCompletedDays] = useState<Set<number>>(new Set());
-  const [flashcardMastery, setFlashcardMastery] = useState<Record<string, boolean>>({});
+  const [flashcardMastery, setFlashcardMastery] = useState<Record<string, boolean | string>>({});
 
   // Question Editing & Modal states
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
@@ -104,6 +105,11 @@ function KitWorkspaceContent() {
   const [editCardBack, setEditCardBack] = useState('');
   const [isSavingCard, setIsSavingCard] = useState(false);
   const [cardToDelete, setCardToDelete] = useState<string | null>(null);
+  
+  // Domain 7 Practice & Spaced Repetition state
+  const [practiceQueueFilter, setPracticeQueueFilter] = useState<'all' | 'shaky' | 'unpracticed'>('all');
+  const [practiceAnalytics, setPracticeAnalytics] = useState<PracticeAnalyticsResponse | null>(null);
+  const [isSubmittingRating, setIsSubmittingRating] = useState(false);
 
   // Section Regeneration Progress Overlay
   const [regenerationState, setRegenerationState] = useState<{
@@ -215,6 +221,16 @@ function KitWorkspaceContent() {
         setFlashcardMastery(detail.progress.flashcardMastery);
       }
     }
+
+    // Load initial Domain 7 practice analytics
+    practiceApi
+      .getPracticeAnalytics(kitId)
+      .then((analytics) => {
+        setPracticeAnalytics(analytics);
+      })
+      .catch((err) => {
+        console.error('Failed to load practice analytics:', err);
+      });
   }
 
   // Poll section regeneration until completed
@@ -447,6 +463,52 @@ function KitWorkspaceContent() {
     }
   }
 
+  // --- Domain 7 Practice Handlers ---
+  async function handleFilterQueue(newFilter: 'all' | 'shaky' | 'unpracticed') {
+    setPracticeQueueFilter(newFilter);
+    setCurrentCardIndex(0);
+    setIsFlipped(false);
+    try {
+      const data = await practiceApi.getPracticeAnalytics(kitId, newFilter);
+      setPracticeAnalytics(data);
+    } catch (err) {
+      console.error('Failed to filter practice queue:', err);
+    }
+  }
+
+  async function handleRecordPracticeRating(cardId: string, confidence: 1 | 2 | 3) {
+    if (isSubmittingRating) return;
+    setIsSubmittingRating(true);
+
+    const label = confidence === 3 ? 'mastered' : confidence === 2 ? 'good' : 'shaky';
+    setFlashcardMastery((prev) => ({ ...prev, [cardId]: label }));
+
+    setIsFlipped(false);
+    if (displayCards.length > 0) {
+      setCurrentCardIndex((prev) => (prev + 1) % displayCards.length);
+    }
+
+    try {
+      const updated = await practiceApi.recordPracticeSession(kitId, [
+        { cardId, confidence, practicedAt: new Date().toISOString() },
+      ]);
+      setPracticeAnalytics({
+        totalCards: updated.totalCards,
+        practicedCardCount: updated.practicedCardCount,
+        coveragePercentage: updated.coveragePercentage,
+        weakSpotRadar: updated.weakSpotRadar,
+        queue: updated.queue,
+      });
+      const labelText = confidence === 3 ? 'Mastered (3)' : confidence === 2 ? 'Good (2)' : 'Shaky (1)';
+      setActionNotice(`Rated card as ${labelText}`);
+      setTimeout(() => setActionNotice(null), 2000);
+    } catch (err: any) {
+      console.error('Failed to record practice rating:', err);
+    } finally {
+      setIsSubmittingRating(false);
+    }
+  }
+
   async function handleAddFlashcard() {
     if (!newCardFront.trim() || !newCardBack.trim()) {
       alert('Please fill in both front and back content.');
@@ -582,6 +644,71 @@ function KitWorkspaceContent() {
     }
   }
 
+  const kit = kitDetail?.kit;
+  const questions = kit?.questions || [];
+  const flashcards = kit?.flashcards || [];
+  const schedule = kit?.schedule;
+  const role = kit?.role;
+  const brief = kit?.company_brief;
+
+  const categories = ['all', 'technical', 'behavioural', 'system-design', 'company-fit'];
+  const filteredQuestions =
+    selectedCategory === 'all'
+      ? questions
+      : questions.filter((q: any) => q.category === selectedCategory);
+
+  // Spaced Repetition prioritized deck (D7.3)
+  const queueCards = practiceAnalytics?.queue?.length
+    ? practiceAnalytics.queue.map((q) => q.card)
+    : flashcards;
+  const displayCards = queueCards.length > 0 ? queueCards : flashcards;
+  const currentCard = displayCards[currentCardIndex] || displayCards[0];
+
+  // Keyboard shortcuts for Study Deck (Space to flip, 1-3 to rate, arrows to navigate)
+  useEffect(() => {
+    if (activeTab !== 'flashcards') return;
+
+    function handleKeyDown(e: KeyboardEvent) {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      ) {
+        return;
+      }
+
+      if (e.code === 'Space') {
+        e.preventDefault();
+        setIsFlipped((prev) => !prev);
+      } else if (e.key === '1') {
+        if (currentCard) {
+          e.preventDefault();
+          handleRecordPracticeRating(currentCard.id, 1);
+        }
+      } else if (e.key === '2') {
+        if (currentCard) {
+          e.preventDefault();
+          handleRecordPracticeRating(currentCard.id, 2);
+        }
+      } else if (e.key === '3') {
+        if (currentCard) {
+          e.preventDefault();
+          handleRecordPracticeRating(currentCard.id, 3);
+        }
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        setIsFlipped(false);
+        setCurrentCardIndex((prev) => (prev + 1) % Math.max(1, displayCards.length));
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        setIsFlipped(false);
+        setCurrentCardIndex((prev) => (prev - 1 + Math.max(1, displayCards.length)) % Math.max(1, displayCards.length));
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeTab, currentCard, displayCards, isSubmittingRating, handleRecordPracticeRating]);
+
   // --- Render Fallbacks ---
   if (loading && !pollProgress) {
     return (
@@ -620,20 +747,6 @@ function KitWorkspaceContent() {
   }
 
   const isPending = kitDetail?.status === 'pending' || (pollProgress && pollProgress.status === 'pending');
-  const kit = kitDetail?.kit;
-  const questions = kit?.questions || [];
-  const flashcards = kit?.flashcards || [];
-  const schedule = kit?.schedule;
-  const role = kit?.role;
-  const brief = kit?.company_brief;
-
-  const categories = ['all', 'technical', 'behavioural', 'system-design', 'company-fit'];
-  const filteredQuestions =
-    selectedCategory === 'all'
-      ? questions
-      : questions.filter((q: any) => q.category === selectedCategory);
-
-  const currentCard = flashcards[currentCardIndex];
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col antialiased">
@@ -802,7 +915,7 @@ function KitWorkspaceContent() {
               }`}
             >
               <Layers className="w-3.5 h-3.5" />
-              <span>Flashcards ({flashcards.length})</span>
+              <span>Flashcards & Practice ({flashcards.length})</span>
             </button>
 
             <button
@@ -1246,32 +1359,74 @@ function KitWorkspaceContent() {
           </div>
         )}
 
-        {/* Tab 3: Interactive Flashcards (with D6-A Edit, Add, Delete & D6-B Mastery) */}
+        {/* Tab 3: Interactive Flashcards & Practice Deck (D7 Study Deck, Spaced Repetition, Weak-Spot Radar) */}
         {activeTab === 'flashcards' && (
-          <div className="space-y-6 max-w-2xl mx-auto py-6">
-            <div className="flex items-center justify-between">
+          <div className="space-y-8 max-w-3xl mx-auto py-6">
+            {/* Header & Queue Filters */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="space-y-1">
-                <h3 className="text-lg font-bold text-white">Rapid Revision Flashcard Deck</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-bold text-white">Interactive Practice Deck</h3>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                    Spaced Repetition
+                  </span>
+                </div>
                 <p className="text-xs text-slate-400">
-                  Click the card to flip between core concept and high-yield bulleted points.
+                  Spacebar flips card. Keys 1, 2, 3 record confidence and advance automatically.
                 </p>
               </div>
 
-              <button
-                onClick={() => setShowAddCardModal(true)}
-                className="px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Add Card</span>
-              </button>
+              <div className="flex items-center gap-2">
+                {/* Spaced Repetition Queue Filter Pills */}
+                <div className="flex items-center bg-slate-900 border border-slate-800 rounded-xl p-1 text-xs">
+                  <button
+                    onClick={() => handleFilterQueue('all')}
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition-colors cursor-pointer ${
+                      practiceQueueFilter === 'all'
+                        ? 'bg-emerald-500 text-slate-950 font-bold'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    All ({flashcards.length})
+                  </button>
+                  <button
+                    onClick={() => handleFilterQueue('shaky')}
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition-colors cursor-pointer ${
+                      practiceQueueFilter === 'shaky'
+                        ? 'bg-amber-500 text-slate-950 font-bold'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Shaky First
+                  </button>
+                  <button
+                    onClick={() => handleFilterQueue('unpracticed')}
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition-colors cursor-pointer ${
+                      practiceQueueFilter === 'unpracticed'
+                        ? 'bg-rose-500 text-white font-bold'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Unpracticed
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => setShowAddCardModal(true)}
+                  className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-white font-semibold rounded-xl text-xs transition-colors flex items-center gap-1.5 cursor-pointer shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Add</span>
+                </button>
+              </div>
             </div>
 
-            {flashcards.length > 0 && currentCard ? (
+            {displayCards.length > 0 && currentCard ? (
               <div className="space-y-4">
-                {/* Flip Card Container */}
+                {/* 3D Flip Card Container */}
                 <div
                   onClick={() => setIsFlipped(!isFlipped)}
-                  className="min-h-[260px] bg-slate-900 border-2 border-slate-800 hover:border-emerald-500/50 rounded-3xl p-8 flex flex-col justify-between cursor-pointer transition-all shadow-2xl backdrop-blur-sm select-none relative group"
+                  className="min-h-[270px] bg-slate-900 border-2 border-slate-800 hover:border-emerald-500/50 rounded-3xl p-6 sm:p-8 flex flex-col justify-between cursor-pointer transition-all shadow-2xl backdrop-blur-sm select-none relative group"
                 >
                   <div className="flex items-center justify-between text-xs text-slate-400">
                     <div className="flex items-center gap-2">
@@ -1286,22 +1441,22 @@ function KitWorkspaceContent() {
                           Hand-Crafted
                         </span>
                       )}
+                      {flashcardMastery[currentCard.id] && (
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                            flashcardMastery[currentCard.id] === 'mastered'
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                              : flashcardMastery[currentCard.id] === 'good'
+                              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                              : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                          }`}
+                        >
+                          {flashcardMastery[currentCard.id]}
+                        </span>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                      {/* Mastery Toggle */}
-                      <button
-                        onClick={() => handleToggleFlashcardMastery(currentCard.id)}
-                        className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer ${
-                          flashcardMastery[currentCard.id]
-                            ? 'bg-emerald-500 text-slate-950 font-bold'
-                            : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-emerald-400'
-                        }`}
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>{flashcardMastery[currentCard.id] ? 'Mastered' : 'Mark Mastered'}</span>
-                      </button>
-
                       {/* Edit Card */}
                       <button
                         onClick={() => {
@@ -1309,7 +1464,7 @@ function KitWorkspaceContent() {
                           setEditCardFront(currentCard.front);
                           setEditCardBack(currentCard.back);
                         }}
-                        className="p-1.5 bg-slate-950 border border-slate-800 hover:text-white text-slate-400 rounded-lg cursor-pointer"
+                        className="p-1.5 bg-slate-950 border border-slate-800 hover:text-white text-slate-400 rounded-lg cursor-pointer transition-colors"
                         title="Edit flashcard"
                       >
                         <Edit3 className="w-3.5 h-3.5" />
@@ -1318,7 +1473,7 @@ function KitWorkspaceContent() {
                       {/* Delete Card */}
                       <button
                         onClick={() => setCardToDelete(currentCard.id)}
-                        className="p-1.5 bg-slate-950 border border-slate-800 hover:text-red-400 text-slate-400 rounded-lg cursor-pointer"
+                        className="p-1.5 bg-slate-950 border border-slate-800 hover:text-red-400 text-slate-400 rounded-lg cursor-pointer transition-colors"
                         title="Delete flashcard"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -1340,15 +1495,63 @@ function KitWorkspaceContent() {
 
                   <div className="flex items-center justify-between text-xs text-slate-500 pt-4 border-t border-slate-800/80">
                     <span className="flex items-center gap-1 font-mono">
-                      Reqs: {currentCard.requirement_ids?.join(', ') || 'Core'}
+                      Reqs: {currentCard.requirement_ids?.join(', ') || 'General'}
                     </span>
                     <span className="text-[11px] text-slate-400 flex items-center gap-1">
-                      <RotateCw className="w-3 h-3 text-emerald-400" /> Click anywhere to flip
+                      <RotateCw className="w-3 h-3 text-emerald-400" /> Spacebar or click to flip
                     </span>
                   </div>
                 </div>
 
-                {/* Card Controls */}
+                {/* 3-Tier Confidence Rating Buttons (D7.1) */}
+                <div className="grid grid-cols-3 gap-2 sm:gap-3 pt-1">
+                  <button
+                    onClick={() => handleRecordPracticeRating(currentCard.id, 1)}
+                    disabled={isSubmittingRating}
+                    className={`px-3 py-2.5 rounded-2xl border flex items-center justify-center gap-2 text-xs font-bold transition-all cursor-pointer ${
+                      flashcardMastery[currentCard.id] === 'shaky'
+                        ? 'bg-rose-500 text-white border-rose-400 shadow-md shadow-rose-500/20'
+                        : 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border-rose-500/30'
+                    }`}
+                    title="Rate 1: Shaky / Needs Review (Shortcut: 1)"
+                  >
+                    <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
+                    <span>1 Shaky</span>
+                    <kbd className="px-1.5 py-0.5 rounded bg-slate-950/40 text-[10px] font-mono">1</kbd>
+                  </button>
+
+                  <button
+                    onClick={() => handleRecordPracticeRating(currentCard.id, 2)}
+                    disabled={isSubmittingRating}
+                    className={`px-3 py-2.5 rounded-2xl border flex items-center justify-center gap-2 text-xs font-bold transition-all cursor-pointer ${
+                      flashcardMastery[currentCard.id] === 'good'
+                        ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md shadow-amber-500/20'
+                        : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30'
+                    }`}
+                    title="Rate 2: Good / Familiar (Shortcut: 2)"
+                  >
+                    <Check className="w-3.5 h-3.5 text-amber-400" />
+                    <span>2 Good</span>
+                    <kbd className="px-1.5 py-0.5 rounded bg-slate-950/40 text-[10px] font-mono">2</kbd>
+                  </button>
+
+                  <button
+                    onClick={() => handleRecordPracticeRating(currentCard.id, 3)}
+                    disabled={isSubmittingRating}
+                    className={`px-3 py-2.5 rounded-2xl border flex items-center justify-center gap-2 text-xs font-bold transition-all cursor-pointer ${
+                      flashcardMastery[currentCard.id] === 'mastered'
+                        ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-md shadow-emerald-500/20'
+                        : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                    }`}
+                    title="Rate 3: Mastered / Confident (Shortcut: 3)"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>3 Mastered</span>
+                    <kbd className="px-1.5 py-0.5 rounded bg-slate-950/40 text-[10px] font-mono">3</kbd>
+                  </button>
+                </div>
+
+                {/* Card Carousel Navigation Controls */}
                 <div className="flex items-center justify-between pt-2">
                   <button
                     disabled={currentCardIndex === 0}
@@ -1361,20 +1564,170 @@ function KitWorkspaceContent() {
                     <ArrowLeft className="w-3.5 h-3.5" /> Previous
                   </button>
 
-                  <span className="text-xs font-mono font-bold text-slate-400">
-                    {currentCardIndex + 1} / {flashcards.length}
-                  </span>
+                  <div className="flex items-center gap-2 text-xs font-mono font-bold text-slate-400">
+                    <span>
+                      Card {currentCardIndex + 1} of {displayCards.length}
+                    </span>
+                    {practiceAnalytics && (
+                      <span className="text-emerald-400">
+                        • {practiceAnalytics.coveragePercentage}% Practiced
+                      </span>
+                    )}
+                  </div>
 
                   <button
-                    disabled={currentCardIndex === flashcards.length - 1}
+                    disabled={currentCardIndex === displayCards.length - 1}
                     onClick={() => {
                       setIsFlipped(false);
-                      setCurrentCardIndex((prev) => Math.min(flashcards.length - 1, prev + 1));
+                      setCurrentCardIndex((prev) => Math.min(displayCards.length - 1, prev + 1));
                     }}
                     className="px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-xs font-semibold rounded-xl border border-slate-800 flex items-center gap-1.5 transition-colors cursor-pointer"
                   >
                     Next <ArrowRight className="w-3.5 h-3.5" />
                   </button>
+                </div>
+
+                {/* Hotkeys Quick Reference Bar */}
+                <div className="flex flex-wrap items-center justify-center gap-4 text-[11px] text-slate-500 pt-2 pb-4 border-b border-slate-800/80">
+                  <span className="flex items-center gap-1">
+                    <kbd className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400 font-mono">Space</kbd> Flip
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <kbd className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400 font-mono">1</kbd> Shaky
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <kbd className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400 font-mono">2</kbd> Good
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <kbd className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400 font-mono">3</kbd> Mastered
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <kbd className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400 font-mono">← / →</kbd> Navigate
+                  </span>
+                </div>
+
+                {/* ── Creative Feature: Weak-Spot Gap Radar (D7.4) ────────────────────── */}
+                <div className="mt-8 bg-slate-900/60 border border-slate-800/90 rounded-3xl p-6 sm:p-8 space-y-6 shadow-xl backdrop-blur-sm">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-emerald-400" />
+                        <h4 className="text-base font-bold text-white">Weak-Spot Gap Radar</h4>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                          Creative Feature
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400">
+                        Translates card recall into JD skill readiness, uncovering blind spots before interviews.
+                      </p>
+                    </div>
+
+                    <div className="text-left sm:text-right shrink-0">
+                      <div className="text-2xl font-black text-emerald-400">
+                        {practiceAnalytics?.weakSpotRadar?.overallReadiness ?? 0}%
+                      </div>
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        Overall JD Readiness
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Danger Zone High-Priority Alert Banner */}
+                  {practiceAnalytics?.weakSpotRadar?.hasDangerZone && (
+                    <div className="bg-rose-500/10 border-2 border-rose-500/40 rounded-2xl p-4 flex items-start gap-3 animate-in fade-in duration-300">
+                      <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+                      <div className="space-y-1 text-xs text-rose-200">
+                        <div className="font-bold text-rose-300 text-sm">
+                          🚨 Danger Zone Alert: {practiceAnalytics.weakSpotRadar.dangerZoneCount} Critical Skill(s) Untouched
+                        </div>
+                        <p className="leading-relaxed">
+                          You have core &quot;Must-Have&quot; job description requirements with zero practice recorded. Rehearse the linked cards below to eliminate critical blind spots.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Requirements Readiness Breakdown List */}
+                  <div className="space-y-3.5">
+                    {practiceAnalytics?.weakSpotRadar?.requirements?.map((req) => (
+                      <div
+                        key={req.requirementId}
+                        className={`p-4 rounded-2xl border transition-all ${
+                          req.isDangerZone
+                            ? 'bg-rose-950/20 border-rose-500/40 shadow-sm shadow-rose-950/50'
+                            : req.isPartiallyUnprepared
+                            ? 'bg-amber-950/15 border-amber-500/30'
+                            : 'bg-slate-950/60 border-slate-800'
+                        }`}
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-bold text-slate-300">{req.requirementId}</span>
+                            <span className="font-semibold text-white">{req.text}</span>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                                req.priority === 'must'
+                                  ? 'bg-red-500/20 text-red-300 border border-red-500/40'
+                                  : 'bg-slate-800 text-slate-400 border border-slate-700'
+                              }`}
+                            >
+                              {req.priority}
+                            </span>
+
+                            {req.isDangerZone ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-rose-500/20 text-rose-300 border border-rose-500/40">
+                                🚨 0% Practiced
+                              </span>
+                            ) : req.isPartiallyUnprepared ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                                ⚠️ Needs Practice
+                              </span>
+                            ) : req.readiness >= 70 ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                                ✓ High Readiness
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        {/* Progress Bar & Linked Count */}
+                        <div className="mt-3 space-y-1.5">
+                          <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
+                            <span>
+                              {req.practicedCardCount} of {req.totalLinkedCards} card(s) practiced
+                            </span>
+                            <span
+                              className={`font-bold ${
+                                req.readiness >= 70
+                                  ? 'text-emerald-400'
+                                  : req.readiness >= 40
+                                  ? 'text-amber-400'
+                                  : 'text-rose-400'
+                              }`}
+                            >
+                              {req.readiness}% Readiness
+                            </span>
+                          </div>
+
+                          <div className="w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800/80">
+                            <div
+                              className={`h-full transition-all duration-500 rounded-full ${
+                                req.readiness >= 70
+                                  ? 'bg-emerald-400 shadow-sm shadow-emerald-400/50'
+                                  : req.readiness >= 40
+                                  ? 'bg-amber-400 shadow-sm shadow-amber-400/50'
+                                  : 'bg-rose-400 shadow-sm shadow-rose-400/50'
+                              }`}
+                              style={{ width: `${req.readiness}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             ) : (

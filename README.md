@@ -115,7 +115,7 @@ npm run test:cli      # Test evaluation CLI runner
 | **D4: Deterministic** | Math & Scheduling | **Complete** | Coverage checker distinguishing must vs. nice-to-have gaps, bounded 2-pass gap repair, difficulty-first study scheduler `(difficulty DESC, isMust DESC, id ASC)` preserving front-loading invariant. |
 | **D5: Kit Lifecycle** | Persistence, Polling & Resilience | **Complete** | 202 Accepted async dispatch, 2.5s HTTP polling progress engine, sub-millisecond in-memory cache with durable DB checkpoints, SHA-256 idempotent deduplication, crash-safe `failKit`, 15-min background stale reaper. |
 | **D6: Builder** | Interactive Editor & Regeneration | **Complete** | Granular inline editing for questions/brief/flashcards, manual additions (`_manual`), non-destructive reordering, single-section regeneration with protected item preservation, singleton confirmation gate (`428 CONFIRMATION_REQUIRED`), OCC versioning (`409 CONCURRENT_MODIFICATION`), and candidate progress tracking. |
-| **D7: Practice** | Mock Simulation | Pending | Audio transcription, AI interviewer follow-ups, depth rubric evaluation. |
+| **D7: Practice & Creative Feature** | Flashcards, Spaced Repetition & Radar | **Complete** | Distraction-free study deck (Spacebar 3D flip, ergonomic hotkeys 1-3/arrows), 3-tier confidence rating persistence in MongoDB `practiceHistory[]`, confidence-weighted spaced repetition urgency queue with infinite unpracticed weight and temporal decay, signature Weak-Spot Gap Radar linking recall back to JD requirements with zero-overstatement guarantee, strict Danger Zone alert banner on unpracticed must-haves, and amber warning pills on partial practice. |
 | **D8: Evaluation** | Appendix B Orchestration | Pending | Core pipeline wiring to `npm run evaluate`. |
 | **D9: Release** | Production Hardening | Pending | Containerization, deployment guides, smoke tests. |
 
@@ -130,6 +130,8 @@ npm run test:cli      # Test evaluation CLI runner
 - [docs/deterministic.md](file:///d:/Prorgram/Project/taro/docs/deterministic.md): Deterministic math, 2-pass gap repair, and study schedule front-loading proofs.
 - [docs/kit-lifecycle.md](file:///d:/Prorgram/Project/taro/docs/kit-lifecycle.md): Kit lifecycle engine, 202 async generation, 2.5s HTTP polling, and stale reaper.
 - [docs/kit-builder.md](file:///d:/Prorgram/Project/taro/docs/kit-builder.md): Kit builder mutations, protected item regeneration rules, and candidate progress tracking.
+- [docs/practice.md](file:///d:/Prorgram/Project/taro/docs/practice.md): Practice engine, 3D flashcard study deck, confidence decay algorithm, and 1,000-session scaling envelope.
+- [docs/creative-feature.md](file:///d:/Prorgram/Project/taro/docs/creative-feature.md): Creative Feature — Weak-Spot Gap Radar, cardinality assumption, zero-overstatement proof, and danger zone criteria.
 - [docs/security.md](file:///d:/Prorgram/Project/taro/docs/security.md): Security controls, threat models, Redis OTP verification, and explicit architectural trade-offs.
 - [docs/operations/environment.md](file:///d:/Prorgram/Project/taro/docs/operations/environment.md): Environment variable specifications and secret management.
 - [docs/operations/runbook.md](file:///d:/Prorgram/Project/taro/docs/operations/runbook.md): Developer runbook, Docker commands, test workflows, and batch evaluation.

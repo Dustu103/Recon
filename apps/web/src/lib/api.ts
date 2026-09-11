@@ -200,7 +200,7 @@ export interface KitDetail {
   progress?: {
     notes?: Record<string, string>;
     starred?: string[];
-    flashcardMastery?: Record<string, boolean>;
+    flashcardMastery?: Record<string, boolean | string>;
     completedDays?: number[];
   };
   __v?: number;

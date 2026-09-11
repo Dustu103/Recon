@@ -2,7 +2,7 @@
 
 This runbook outlines standard development, testing, building, and evaluation workflows for the Taro monorepo.
 
-> **Current test status**: 39 test files · 341 tests · 0 failures
+> **Current test status**: 43 test files · 358 tests · 0 failures
 
 ---
 
@@ -224,3 +224,37 @@ All builder routes are mounted under `/api/kits/:id/` and require session authen
    - Every mutation payload accepts `expectedVersion: number`.
    - If another tab or concurrent action updated the document version `__v`, the mutation is rejected with `409 Conflict` (`CONCURRENT_MODIFICATION`), preventing dirty overwrites.
 
+---
+
+## 6. Practice Engine & Weak-Spot Gap Radar Operations (Domain 7)
+
+Domain 7 provides the Distraction-Free Study Deck, Confidence-Weighted Spaced Repetition Queue, and JD-linked Weak-Spot Gap Radar:
+
+### Running Domain 7 Tests
+```bash
+# Run core algorithm unit tests
+npx vitest run src/core/practice/__tests__/unit/history-reducer.test.ts
+npx vitest run src/core/practice/__tests__/unit/spaced-repetition.test.ts
+npx vitest run src/core/practice/__tests__/unit/weak-spot-radar.test.ts
+
+# Run API persistence integration tests
+npx vitest run src/api/__tests__/unit/kit-practice.test.ts
+```
+
+### Testing Practice Sessions via cURL / HTTP
+
+1. **Record Flashcard Practice Ratings**:
+   ```bash
+   curl -X POST http://localhost:4000/api/kits/<KIT_ID>/practice \
+     -H "Content-Type: application/json" \
+     -b cookies.txt \
+     -d '{"ratings": [{"cardId": "f1", "confidence": 3, "practicedAt": "2026-09-11T12:00:00.000Z"}]}'
+   ```
+   *Expected*: `200 OK` with updated `overallReadiness`, `weakSpotRadar` diagnostics, and recomputed spaced repetition `queue`.
+
+2. **Fetch Filtered Practice Queue & Radar Diagnostics**:
+   ```bash
+   curl "http://localhost:4000/api/kits/<KIT_ID>/practice?filter=shaky" \
+     -b cookies.txt
+   ```
+   *Expected*: `200 OK` returning prioritized flashcards with unpracticed cards assigned infinite urgency, followed by shaky cards decaying over time.

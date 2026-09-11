@@ -63,6 +63,11 @@ export interface IKit extends Document {
     flashcardMastery?: Record<string, string>;
     completedDays?: number[];
   };
+  practiceHistory?: Array<{
+    cardId: string;
+    confidence: 1 | 2 | 3;
+    practicedAt: Date;
+  }>;
   __v?: number;
   createdAt: Date;
   updatedAt: Date;
@@ -149,6 +154,16 @@ const kitSchema = new Schema<IKit>(
     progress: {
       type: Schema.Types.Mixed,
       default: () => ({ notes: {}, starred: [], flashcardMastery: {}, completedDays: [] }),
+    },
+    practiceHistory: {
+      type: [
+        {
+          cardId: { type: String, required: true },
+          confidence: { type: Number, required: true, enum: [1, 2, 3] },
+          practicedAt: { type: Date, default: Date.now },
+        },
+      ],
+      default: [],
     },
   },
   {

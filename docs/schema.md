@@ -249,6 +249,7 @@ All schemas are exported from `@taro/shared` with corresponding TypeScript types
 | `BatchInputCaseSchema`| `BatchInputCase` | Single case entry for batch evaluation input |
 | `BatchInputSchema` | `BatchInputCase[]`| Top-level array of cases for batch evaluation |
 | `BatchOutputSchema` | `BatchOutput` | Top-level envelope for Appendix B evaluation output |
-
-
-
+| `PracticeConfidenceSchema` | `PracticeConfidence` | D7: Confidence ratings 1, 2, or 3 (`shaky`, `good`, `mastered`) |
+| `PracticeRatingItemSchema` | `PracticeRatingItem` | D7: Single card practice rating with timestamp |
+| `PracticeSessionInputSchema`| `PracticeSessionInput` | D7: Request body for recording practice session ratings |
+| `CONFIDENCE_MAP` | `Record<1|2|3, 'shaky'|'good'|'mastered'>` | D7: Canonical mapping from numeric rating to label |

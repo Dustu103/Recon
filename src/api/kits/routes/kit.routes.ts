@@ -8,11 +8,15 @@ import { generateKit } from '@/core';
 import { TaroError, ErrorCode } from '@/shared';
 
 import { kitBuilderRouter } from './kit-builder.routes';
+import { kitPracticeRouter } from './kit-practice.routes';
 
 export const kitRouter = Router();
 
 // Mount Domain 6 Builder routes (inline editing, additions, section regeneration, candidate progress)
 kitRouter.use(kitBuilderRouter);
+
+// Mount Domain 7 Practice routes (session persistence, spaced repetition queue, weak-spot radar)
+kitRouter.use(kitPracticeRouter);
 
 /**
  * POST /api/kits/generate
