@@ -84,7 +84,14 @@ function KitWorkspaceContent() {
   // Candidate Progress tracking (D6-B)
   const [starredQuestions, setStarredQuestions] = useState<Set<string>>(new Set());
   const [completedDays, setCompletedDays] = useState<Set<number>>(new Set());
+  const [expandedDays, setExpandedDays] = useState<Set<number>>(new Set([1])); // default Day 1 open
   const [flashcardMastery, setFlashcardMastery] = useState<Record<string, boolean | string>>({});
+
+  // Day Study Session Timer state
+  const [activeStudyDay, setActiveStudyDay] = useState<number | null>(null);
+  const [studyTimerSeconds, setStudyTimerSeconds] = useState<number>(0);
+  const [isStudyTimerRunning, setIsStudyTimerRunning] = useState<boolean>(false);
+  const [studyDayTargetMinutes, setStudyDayTargetMinutes] = useState<number>(30);
 
   // Question Editing & Modal states
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
@@ -766,6 +773,25 @@ function KitWorkspaceContent() {
     };
   }, [isTimerRunning]);
 
+  // Day Study Focus Timer Effect
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    if (isStudyTimerRunning) {
+      interval = setInterval(() => {
+        setStudyTimerSeconds((prev) => {
+          if (prev <= 1) {
+            setIsStudyTimerRunning(false);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isStudyTimerRunning]);
+
   // Initial Question Setup for Mock Interview
   useEffect(() => {
     if (questions && questions.length > 0 && !selectedInterviewQuestionId) {
@@ -897,6 +923,55 @@ function KitWorkspaceContent() {
     const mins = Math.floor(totalSecs / 60);
     const secs = totalSecs % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }
+
+  function formatStudyTimer(totalSecs: number) {
+    const mins = Math.floor(totalSecs / 60);
+    const secs = totalSecs % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }
+
+  function handleStartDayStudyTimer(dayNum: number, targetMinutes: number) {
+    if (activeStudyDay === dayNum && studyTimerSeconds > 0) {
+      setIsStudyTimerRunning(true);
+    } else {
+      setActiveStudyDay(dayNum);
+      const mins = targetMinutes || 30;
+      setStudyDayTargetMinutes(mins);
+      setStudyTimerSeconds(mins * 60);
+      setIsStudyTimerRunning(true);
+    }
+  }
+
+  function handlePauseDayStudyTimer() {
+    setIsStudyTimerRunning((prev) => !prev);
+  }
+
+  function handleResetDayStudyTimer(targetMinutes: number) {
+    setIsStudyTimerRunning(false);
+    const mins = targetMinutes || 30;
+    setStudyTimerSeconds(mins * 60);
+  }
+
+  function handleOpenQuestionInBank(qId: string) {
+    setSelectedCategory('all');
+    setActiveTab('questions');
+    setExpandedQuestions((prev) => ({ ...prev, [qId]: true }));
+    setTimeout(() => {
+      const el = document.getElementById(`question-${qId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('ring-2', 'ring-emerald-400', 'ring-offset-2', 'ring-offset-slate-950');
+        setTimeout(() => {
+          el.classList.remove('ring-2', 'ring-emerald-400', 'ring-offset-2', 'ring-offset-slate-950');
+        }, 2500);
+      }
+    }, 120);
+  }
+
+  function handleStartInterviewFromQuestion(qId: string) {
+    handleSelectInterviewQuestion(qId);
+    setActiveTab('interview');
   }
 
   // --- Render Fallbacks ---
@@ -1082,6 +1157,11 @@ function KitWorkspaceContent() {
             >
               <Calendar className="w-3.5 h-3.5" />
               <span>Study Schedule</span>
+              {isStudyTimerRunning && (
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-950 text-emerald-400 border border-emerald-500/40 animate-pulse flex items-center gap-1">
+                  <Timer className="w-2.5 h-2.5" /> {formatStudyTimer(studyTimerSeconds)}
+                </span>
+              )}
             </button>
 
             <button
@@ -1118,9 +1198,15 @@ function KitWorkspaceContent() {
             >
               <Mic className="w-3.5 h-3.5" />
               <span>AI Mock Interview</span>
-              <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                Voice & Code
-              </span>
+              {isTimerRunning ? (
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-950 text-emerald-400 border border-emerald-500/40 animate-pulse flex items-center gap-1">
+                  <Timer className="w-2.5 h-2.5" /> {formatTimer(sessionSeconds)}
+                </span>
+              ) : (
+                <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  Voice & Code
+                </span>
+              )}
             </button>
 
             <button
@@ -1150,7 +1236,7 @@ function KitWorkspaceContent() {
           </div>
         </div>
 
-        {/* Tab 1: Day-by-Day Study Schedule (with D6-B Checkoffs) */}
+        {/* Tab 1: Day-by-Day Study Schedule (with D6-B Checkoffs & Focus Timer) */}
         {activeTab === 'schedule' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -1162,75 +1248,251 @@ function KitWorkspaceContent() {
               </div>
             </div>
 
+            {/* Active Study Session Timer Banner */}
+            {activeStudyDay !== null && studyTimerSeconds > 0 && (
+              <div className="bg-slate-900/90 border border-emerald-500/40 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 shadow-lg shadow-emerald-500/10 backdrop-blur-sm">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-400">
+                    <Timer className={`w-5 h-5 ${isStudyTimerRunning ? 'animate-pulse' : ''}`} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-white">
+                        Day {activeStudyDay} Study Focus Timer
+                      </span>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          isStudyTimerRunning
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                            : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                        }`}
+                      >
+                        {isStudyTimerRunning ? 'Focused Prep Running' : 'Timer Paused'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Target: {studyDayTargetMinutes} min planned session • Stay focused on today&apos;s questions
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="font-mono text-2xl font-black text-white tracking-wider bg-slate-950 px-4 py-1.5 rounded-xl border border-slate-800 shadow-inner">
+                    {formatStudyTimer(studyTimerSeconds)}
+                  </div>
+
+                  <button
+                    onClick={handlePauseDayStudyTimer}
+                    className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm"
+                  >
+                    {isStudyTimerRunning ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                    <span>{isStudyTimerRunning ? 'Pause' : 'Resume'}</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleResetDayStudyTimer(studyDayTargetMinutes)}
+                    className="p-2 bg-slate-950 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-800 rounded-xl transition-colors cursor-pointer"
+                    title="Reset Timer"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {schedule?.days.map((day: any) => {
                 const isCompleted = completedDays.has(day.day);
+                const isExpanded = expandedDays.has(day.day);
+                const dayQuestions = questions.filter((q: any) => day.question_ids.includes(q.id));
                 return (
                   <div
                     key={day.day}
-                    className={`bg-slate-900/70 border rounded-2xl p-5 space-y-4 transition-all group backdrop-blur-sm ${
+                    className={`bg-slate-900/70 border rounded-2xl transition-all backdrop-blur-sm ${
                       isCompleted
                         ? 'border-emerald-500/40 bg-slate-900/90'
                         : 'border-slate-800 hover:border-slate-700'
-                    }`}
+                    } ${isExpanded ? 'md:col-span-2 lg:col-span-3' : ''}`}
                   >
-                    <div className="flex items-center justify-between">
-                      <span
-                        className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${
-                          isCompleted
-                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                            : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                        }`}
-                      >
-                        Day {day.day}
-                      </span>
-                      <button
-                        onClick={() => handleToggleDayCompletion(day.day)}
-                        className={`flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded-lg transition-colors cursor-pointer ${
-                          isCompleted
-                            ? 'bg-emerald-500 text-slate-950 font-bold'
-                            : 'text-slate-400 hover:text-white bg-slate-950 border border-slate-800'
-                        }`}
-                      >
-                        {isCompleted ? (
-                          <>
-                            <CheckSquare className="w-3.5 h-3.5" />
-                            <span>Done</span>
-                          </>
-                        ) : (
-                          <>
-                            <Square className="w-3.5 h-3.5" />
-                            <span>Mark Done</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
+                    {/* Clickable Card Header */}
+                    <div
+                      onClick={() => setExpandedDays((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(day.day)) next.delete(day.day);
+                        else next.add(day.day);
+                        return next;
+                      })}
+                      className="p-5 cursor-pointer select-none"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${
+                            isCompleted
+                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                              : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                          }`}
+                        >
+                          Day {day.day}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          {/* Day Study Timer Control */}
+                          {activeStudyDay === day.day && studyTimerSeconds > 0 ? (
+                            <div
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-mono text-xs font-bold"
+                            >
+                              <Timer className={`w-3.5 h-3.5 ${isStudyTimerRunning ? 'animate-pulse text-emerald-400' : 'text-slate-400'}`} />
+                              <span>{formatStudyTimer(studyTimerSeconds)}</span>
+                              <button
+                                onClick={handlePauseDayStudyTimer}
+                                className="hover:text-white transition-colors ml-0.5 cursor-pointer"
+                                title={isStudyTimerRunning ? 'Pause timer' : 'Resume timer'}
+                              >
+                                {isStudyTimerRunning ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+                              </button>
+                              <button
+                                onClick={() => handleResetDayStudyTimer(day.minutes)}
+                                className="hover:text-red-400 text-slate-400 transition-colors cursor-pointer"
+                                title="Reset timer"
+                              >
+                                <RotateCcw className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleStartDayStudyTimer(day.day, day.minutes);
+                              }}
+                              className="flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-300 hover:text-emerald-400 border border-slate-800 transition-colors cursor-pointer"
+                              title={`Start ${day.minutes || 30}m focus study timer for Day ${day.day}`}
+                            >
+                              <Timer className="w-3.5 h-3.5 text-emerald-400" />
+                              <span className="hidden sm:inline">{day.minutes || 30}m Timer</span>
+                            </button>
+                          )}
 
-                    <div>
-                      <h4 className="text-sm font-semibold text-white group-hover:text-emerald-400 transition-colors">
-                        {day.focus}
-                      </h4>
-                      <p className="text-xs text-slate-400 mt-1 flex items-center gap-1 font-mono">
-                        <Clock className="w-3 h-3 text-slate-500" />
-                        <span>{day.minutes} min focused prep</span>
-                      </p>
-                    </div>
-
-                    <div className="space-y-1.5 pt-2 border-t border-slate-800">
-                      <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                        Assigned Questions ({day.question_ids.length})
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {day.question_ids.map((qId: string) => (
-                          <span
-                            key={qId}
-                            className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-[11px] font-mono text-slate-300"
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleToggleDayCompletion(day.day); }}
+                            className={`flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded-lg transition-colors cursor-pointer ${
+                              isCompleted
+                                ? 'bg-emerald-500 text-slate-950 font-bold'
+                                : 'text-slate-400 hover:text-white bg-slate-950 border border-slate-800'
+                            }`}
                           >
-                            {qId}
-                          </span>
-                        ))}
+                            {isCompleted ? (
+                              <>
+                                <CheckSquare className="w-3.5 h-3.5" />
+                                <span>Done</span>
+                              </>
+                            ) : (
+                              <>
+                                <Square className="w-3.5 h-3.5" />
+                                <span>Mark Done</span>
+                              </>
+                            )}
+                          </button>
+                          {isExpanded
+                            ? <ChevronUp className="w-4 h-4 text-slate-400" />
+                            : <ChevronDown className="w-4 h-4 text-slate-400" />
+                          }
+                        </div>
+                      </div>
+
+                      <div className="mt-3">
+                        <h4 className="text-sm font-semibold text-white group-hover:text-emerald-400 transition-colors">
+                          {day.focus}
+                        </h4>
+                        <p className="text-xs text-slate-400 mt-1 flex items-center gap-1 font-mono">
+                          <Clock className="w-3 h-3 text-slate-500" />
+                          <span>{day.minutes} min focused prep</span>
+                          <span className="text-slate-600 mx-1">•</span>
+                          <span>{day.question_ids.length} question{day.question_ids.length !== 1 ? 's' : ''}</span>
+                          {!isExpanded && (
+                            <span className="ml-auto text-emerald-400 text-[11px] font-semibold">Click to view questions →</span>
+                          )}
+                        </p>
                       </div>
                     </div>
+
+                    {/* Expanded: Full Question Details */}
+                    {isExpanded && (
+                      <div className="border-t border-slate-800 px-5 pb-5 pt-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                            Questions for Day {day.day} • Click any question to open in Question Bank
+                          </p>
+                          <span className="text-[11px] text-emerald-400 font-semibold hidden sm:inline">
+                            Interactive Questions
+                          </span>
+                        </div>
+
+                        {dayQuestions.length === 0 ? (
+                          <p className="text-xs text-slate-500 italic">No questions linked to this day yet.</p>
+                        ) : (
+                          dayQuestions.map((q: any, idx: number) => (
+                            <div
+                              key={q.id}
+                              onClick={() => handleOpenQuestionInBank(q.id)}
+                              className="group bg-slate-950 border border-slate-800 hover:border-emerald-500/60 rounded-xl p-4 space-y-2.5 transition-all cursor-pointer hover:bg-slate-900/70 hover:shadow-lg hover:shadow-emerald-500/5 relative"
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-[10px] font-mono font-bold text-slate-500">#{idx + 1}</span>
+                                  <span className="px-2 py-0.5 rounded bg-slate-900 text-emerald-400 font-mono text-[11px] font-bold border border-slate-800">
+                                    {q.id}
+                                  </span>
+                                  <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wider bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                                    {q.category}
+                                  </span>
+                                  <div className="flex items-center text-amber-400">
+                                    {Array.from({ length: q.difficulty || 1 }).map((_, i) => (
+                                      <Star key={i} className="w-3 h-3 fill-amber-400" />
+                                    ))}
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-semibold group-hover:text-emerald-300">
+                                  <span>Open in Question Bank</span>
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </div>
+                              </div>
+
+                              <p className="text-sm font-semibold text-white group-hover:text-emerald-200 transition-colors leading-snug">
+                                {q.prompt}
+                              </p>
+
+                              {(q.answer_outline || q.suggested_answer) && (
+                                <div className="text-xs text-slate-400 leading-relaxed border-t border-slate-800/80 pt-2 font-sans line-clamp-2 group-hover:line-clamp-none transition-all">
+                                  <span className="font-bold text-slate-500 uppercase text-[10px] tracking-wider">Answer outline: </span>
+                                  {q.answer_outline || q.suggested_answer}
+                                </div>
+                              )}
+
+                              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/60" onClick={(e) => e.stopPropagation()}>
+                                <button
+                                  onClick={() => handleOpenQuestionInBank(q.id)}
+                                  className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 transition-colors flex items-center gap-1 cursor-pointer"
+                                >
+                                  <ChevronRight className="w-3.5 h-3.5" />
+                                  <span>Full Notes & Hints in Question Bank →</span>
+                                </button>
+
+                                <button
+                                  onClick={() => handleStartInterviewFromQuestion(q.id)}
+                                  className="text-[11px] font-bold text-emerald-300 hover:text-emerald-200 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 px-3 py-1 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+                                  title="Practice in AI Mock Interview with Voice, Code Editor & Session Timer"
+                                >
+                                  <Mic className="w-3.5 h-3.5 text-emerald-400" />
+                                  <Timer className="w-3 h-3 text-emerald-400" />
+                                  <span>Practice with AI & Timer</span>
+                                </button>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -1337,6 +1599,17 @@ function KitWorkspaceContent() {
 
                       {/* Top Right Action Icons */}
                       <div className="flex items-center gap-1.5 shrink-0">
+                        {/* Practice in AI Mock Interview Button */}
+                        <button
+                          onClick={() => handleStartInterviewFromQuestion(q.id)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm"
+                          title="Practice this question in AI Mock Interview with Voice, Code Editor & Session Timer"
+                        >
+                          <Mic className="w-3.5 h-3.5" />
+                          <Timer className="w-3 h-3 text-emerald-400" />
+                          <span className="hidden md:inline">Practice with AI</span>
+                        </button>
+
                         {/* Star Button */}
                         <button
                           onClick={() => handleToggleStar(q.id)}
