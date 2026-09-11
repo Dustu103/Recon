@@ -12,7 +12,7 @@ import {
   InterviewReportSchema,
 } from '@taro/shared';
 import { LlmClient, getDefaultLlmClient } from '../llm/client';
-import { parseJsonWithRepair } from '../llm/json-parser';
+import { parseAndValidateJson, stripMarkdownFences } from '../llm/json-parser';
 
 export async function evaluateInterviewTurn(
   input: InterviewTurnInput,
@@ -89,48 +89,55 @@ Respond ONLY with valid JSON. Do not include markdown code block backticks outsi
       maxTokens: 1200,
     });
 
-    const parsed = parseJsonWithRepair(response.text);
-    const validated = InterviewTurnResponseSchema.safeParse(parsed);
+    try {
+      const parsedRaw = parseAndValidateJson<any>(response.content);
+      return InterviewTurnResponseSchema.parse(parsedRaw);
+    } catch {
+      try {
+        const parsed = parseAndValidateJson<any>(response.content);
+        if (parsed && typeof parsed === 'object' && parsed.interviewerReply) {
+          return {
+            interviewerReply: String(parsed.interviewerReply),
+            feedback: {
+              score: typeof parsed.feedback?.score === 'number' ? parsed.feedback.score : 7,
+              strengths: Array.isArray(parsed.feedback?.strengths) ? parsed.feedback.strengths : ['Good preliminary approach'],
+              areasForImprovement: Array.isArray(parsed.feedback?.areasForImprovement) ? parsed.feedback.areasForImprovement : [],
+              codeAnalysis: parsed.feedback?.codeAnalysis ? {
+                timeComplexity: parsed.feedback.codeAnalysis.timeComplexity,
+                spaceComplexity: parsed.feedback.codeAnalysis.spaceComplexity,
+                edgeCasesCovered: Array.isArray(parsed.feedback.codeAnalysis.edgeCasesCovered) ? parsed.feedback.codeAnalysis.edgeCasesCovered : [],
+                suggestions: Array.isArray(parsed.feedback.codeAnalysis.suggestions) ? parsed.feedback.codeAnalysis.suggestions : [],
+              } : (codeSnippet ? {
+                timeComplexity: 'O(N)',
+                spaceComplexity: 'O(1)',
+                edgeCasesCovered: [],
+                suggestions: [],
+              } : undefined),
+              isComplete: Boolean(parsed.feedback?.isComplete),
+            },
+          };
+        }
+      } catch {
+        // Fallback below
+      }
 
-    if (validated.success) {
-      return validated.data;
-    }
-
-    // Fallback if parsing or schema validation encountered slight variance
-    if (parsed && typeof parsed === 'object' && parsed.interviewerReply) {
+      // Fallback to conversational response if JSON structure was malformed
       return {
-        interviewerReply: String(parsed.interviewerReply),
+        interviewerReply: stripMarkdownFences(response.content).trim(),
         feedback: {
-          score: typeof parsed.feedback?.score === 'number' ? parsed.feedback.score : 7,
-          strengths: Array.isArray(parsed.feedback?.strengths) ? parsed.feedback.strengths : ['Good preliminary approach'],
-          areasForImprovement: Array.isArray(parsed.feedback?.areasForImprovement) ? parsed.feedback.areasForImprovement : [],
-          codeAnalysis: parsed.feedback?.codeAnalysis || (codeSnippet ? {
-            timeComplexity: 'O(N)',
-            spaceComplexity: 'O(1)',
+          score: 7,
+          strengths: ['Addressed the core interview question prompt directly'],
+          areasForImprovement: ['Elaborate on edge cases and operational constraints'],
+          codeAnalysis: codeSnippet ? {
+            timeComplexity: 'Analysis pending',
+            spaceComplexity: 'Analysis pending',
             edgeCasesCovered: [],
             suggestions: [],
-          } : undefined),
-          isComplete: Boolean(parsed.feedback?.isComplete),
+          } : undefined,
+          isComplete: false,
         },
       };
     }
-
-    // Fallback to conversational response if JSON structure was malformed
-    return {
-      interviewerReply: response.text.replace(/```json/g, '').replace(/```/g, '').trim(),
-      feedback: {
-        score: 7,
-        strengths: ['Addressed the core interview question prompt directly'],
-        areasForImprovement: ['Elaborate on edge cases and operational constraints'],
-        codeAnalysis: codeSnippet ? {
-          timeComplexity: 'Analysis pending',
-          spaceComplexity: 'Analysis pending',
-          edgeCasesCovered: [],
-          suggestions: [],
-        } : undefined,
-        isComplete: false,
-      },
-    };
   } catch (err: any) {
     // Graceful offline / mock fallback
     const codeLang = codeSnippet?.language === 'cpp' ? 'C++' : 'JavaScript';
@@ -244,34 +251,43 @@ Respond ONLY with valid JSON.`;
       maxTokens: 1500,
     });
 
-    const parsed = parseJsonWithRepair(response.text);
-    const validated = InterviewReportSchema.safeParse(parsed);
-
-    if (validated.success) {
-      return validated.data;
-    }
-
-    if (parsed && typeof parsed === 'object') {
-      return {
-        overallScore: typeof parsed.overallScore === 'number' ? parsed.overallScore : 78,
-        durationFormatted,
-        pacingEvaluation,
-        executiveSummary: parsed.executiveSummary || 'Solid interview session demonstrating good domain familiarity and technical reasoning.',
-        strengths: Array.isArray(parsed.strengths) ? parsed.strengths : ['Good verbal articulation', 'Addressed the main question'],
-        areasForImprovement: Array.isArray(parsed.areasForImprovement) ? parsed.areasForImprovement : ['Refine edge-case analysis'],
-        repeatingErrors: Array.isArray(parsed.repeatingErrors) ? parsed.repeatingErrors : ['Tendency to begin coding before verifying full constraints'],
-        codeReview: parsed.codeReview || (codeSnippet ? {
-          language: codeSnippet.language,
-          timeComplexity: 'O(N)',
-          spaceComplexity: 'O(1)',
-          algorithmicVerdict: 'Functional implementation',
-          syntaxAndQuality: ['Clean structure'],
-        } : undefined),
-        actionablePracticePlan: Array.isArray(parsed.actionablePracticePlan) ? parsed.actionablePracticePlan : [
-          'Review 3 classic sliding window and two-pointer patterns',
-          'Practice verbalizing time and space complexity upfront',
-        ],
-      };
+    try {
+      const parsedRaw = parseAndValidateJson<any>(response.content);
+      return InterviewReportSchema.parse(parsedRaw);
+    } catch {
+      try {
+        const parsed = parseAndValidateJson<any>(response.content);
+        if (parsed && typeof parsed === 'object') {
+          return {
+            overallScore: typeof parsed.overallScore === 'number' ? parsed.overallScore : 78,
+            durationFormatted,
+            pacingEvaluation,
+            executiveSummary: parsed.executiveSummary || 'Solid interview session demonstrating good domain familiarity and technical reasoning.',
+            strengths: Array.isArray(parsed.strengths) ? parsed.strengths : ['Good verbal articulation', 'Addressed the main question'],
+            areasForImprovement: Array.isArray(parsed.areasForImprovement) ? parsed.areasForImprovement : ['Refine edge-case analysis'],
+            repeatingErrors: Array.isArray(parsed.repeatingErrors) ? parsed.repeatingErrors : ['Tendency to begin coding before verifying full constraints'],
+            codeReview: parsed.codeReview ? {
+              language: parsed.codeReview.language,
+              timeComplexity: parsed.codeReview.timeComplexity,
+              spaceComplexity: parsed.codeReview.spaceComplexity,
+              algorithmicVerdict: parsed.codeReview.algorithmicVerdict,
+              syntaxAndQuality: Array.isArray(parsed.codeReview.syntaxAndQuality) ? parsed.codeReview.syntaxAndQuality : ['Clean structure'],
+            } : (codeSnippet ? {
+              language: codeSnippet.language,
+              timeComplexity: 'O(N)',
+              spaceComplexity: 'O(1)',
+              algorithmicVerdict: 'Functional implementation',
+              syntaxAndQuality: ['Clean structure'],
+            } : undefined),
+            actionablePracticePlan: Array.isArray(parsed.actionablePracticePlan) ? parsed.actionablePracticePlan : [
+              'Review 3 classic sliding window and two-pointer patterns',
+              'Practice verbalizing time and space complexity upfront',
+            ],
+          };
+        }
+      } catch {
+        // Fall through to offline mock report
+      }
     }
   } catch (err) {
     // Graceful fallback

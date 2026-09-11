@@ -9,6 +9,10 @@ describe('GET /api/health', () => {
     expect(res.body.status).toBe('ok');
     expect(res.body.service).toBe('@taro/server');
     expect(res.body.timestamp).toBeDefined();
+    expect(res.body.db).toBeDefined();
+    expect(['connected', 'disconnected']).toContain(res.body.db);
+    expect(res.body.llm).toBeDefined();
+    expect(['configured', 'mock']).toContain(res.body.llm);
 
     // Verify Helmet security headers
     expect(res.headers['x-content-type-options']).toBe('nosniff');

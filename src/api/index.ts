@@ -2,6 +2,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
+import mongoose from 'mongoose';
 import { validateServerEnv, ServerEnv, TaroError, ErrorCode } from '@/shared';
 import { getHttpStatusForErrorCode } from './shared/errors/status-map';
 import { connectDatabase } from './shared/db';
@@ -43,8 +44,13 @@ app.use(express.json({ limit: '2mb' }));
 
 // ── Health Check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (_req: Request, res: Response) => {
+  const isDbConnected = mongoose.connection.readyState === 1;
+  const isLlmConfigured = Boolean(process.env.GEMINI_API_KEY || process.env.GROQ_API_KEY);
+
   res.status(200).json({
     status: 'ok',
+    db: isDbConnected ? 'connected' : 'disconnected',
+    llm: isLlmConfigured ? 'configured' : 'mock',
     timestamp: new Date().toISOString(),
     service: '@taro/server',
   });

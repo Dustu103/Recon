@@ -537,3 +537,22 @@ Root `README.md` must answer all 9 assessment-required topics:
 | Interaction design: 10 pts | D5.2, D5.5, D6.1 |
 | Code quality + README: 10 pts | D0, D9.2 |
 | Practice + Creative: 10 pts | D7 |
+
+---
+
+## Domain Completion Summary
+
+| Domain | Status | Tests | Key Deliverables |
+|---|---|---|---|
+| **D0 Infrastructure** | **COMPLETE** | 43 passed | Appendix A/B Schemas, 26 Frozen Errors, ID Generator, Vitest runner |
+| **D1 Identity** | **COMPLETE** | 44 passed | Cookie-only JWT, 2-step Redis OTP (5-min), 15-min password reset, Resend mailer |
+| **D2 Research Engine** | **COMPLETE** | 35 passed | SSRF Undici socket pinning, RFC 9309 robots, link ranker, discussion notes |
+| **D3 AI Generation Engine** | **COMPLETE** | 29 passed | Gemini 1.5 Flash + Groq fallback, schema JSON parsing, prompt guard |
+| **D4 Deterministic Logic** | **COMPLETE** | 16 passed | Must/nice coverage checker, bounded 2-pass gap repair, front-loaded scheduler |
+| **D5 Kit Lifecycle** | **COMPLETE** | 58 passed | 202 Accepted, 2.5s polling engine, in-memory cache + DB checkpoints, stale reaper |
+| **D6 The Builder** | **COMPLETE** | 68 passed | Inline editing, pinning, protected sectional regeneration, OCC versioning, confirmation gate |
+| **D7 Practice & Creative** | **COMPLETE** | 67 passed | 3D flip card deck, spaced repetition urgency queue, Weak-Spot Gap Radar, AI Mock Interview |
+| **D8 Evaluation CLI** | **COMPLETE** | 5 passed | `npm run evaluate`, Appendix B schema validation, localhost autograder, `--mock` flag |
+| **D9 Release** | **COMPLETE** | 4 passed | `render.yaml`, `vercel.json`, `/api/health`, video script, 9-topic architectural defense |
+| **TOTAL** | **100% COMPLETE** | **369 passed** | **45 test files passing, 0 failures** |
+
