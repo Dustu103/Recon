@@ -37,3 +37,25 @@ export type {
   RequirementReadiness,
   WeakSpotRadarAnalysis,
 } from './practice.schema';
+export {
+  InterviewLanguageSchema,
+  InterviewCodeSnippetSchema,
+  InterviewRoleSchema,
+  InterviewMessageSchema,
+  InterviewTurnInputSchema,
+  InterviewFeedbackSchema,
+  InterviewTurnResponseSchema,
+  InterviewReportInputSchema,
+  InterviewReportSchema,
+} from './interview.schema';
+export type {
+  InterviewLanguage,
+  InterviewCodeSnippet,
+  InterviewRole,
+  InterviewMessage,
+  InterviewTurnInput,
+  InterviewFeedback,
+  InterviewTurnResponse,
+  InterviewReportInput,
+  InterviewReport,
+} from './interview.schema';

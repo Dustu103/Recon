@@ -8,7 +8,17 @@ import { Navbar } from '../../../../components/ui/navbar';
 import { kitsApi, KitDetail, ApiClientError } from '../../../../lib/api';
 import { kitBuilderApi } from '../../../../lib/kit-builder';
 import { practiceApi, PracticeAnalyticsResponse } from '../../../../lib/practice-api';
-import { QuestionCategory } from '@taro/shared';
+import { interviewApi } from '../../../../lib/interview-api';
+import { CodeEditor } from '../../../../components/code-editor';
+import { VoiceInputButton } from '../../../../components/voice-input-button';
+import { VoiceSpeakerButton } from '../../../../components/voice-speaker-button';
+import {
+  QuestionCategory,
+  InterviewLanguage,
+  InterviewMessage,
+  InterviewFeedback,
+  InterviewReport,
+} from '@taro/shared';
 import {
   Sparkles,
   ChevronRight,
@@ -40,6 +50,17 @@ import {
   RefreshCw,
   CheckSquare,
   Square,
+  Mic,
+  Play,
+  Pause,
+  RotateCcw,
+  Send,
+  Code2,
+  Award,
+  FileSpreadsheet,
+  CheckCheck,
+  BarChart3,
+  Timer,
 } from 'lucide-react';
 
 function KitWorkspaceContent() {
@@ -52,7 +73,7 @@ function KitWorkspaceContent() {
   const [error, setError] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<'schedule' | 'questions' | 'flashcards' | 'role' | 'brief'>('schedule');
+  const [activeTab, setActiveTab] = useState<'schedule' | 'questions' | 'flashcards' | 'role' | 'brief' | 'interview'>('schedule');
 
   // Question bank state
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -110,6 +131,25 @@ function KitWorkspaceContent() {
   const [practiceQueueFilter, setPracticeQueueFilter] = useState<'all' | 'shaky' | 'unpracticed'>('all');
   const [practiceAnalytics, setPracticeAnalytics] = useState<PracticeAnalyticsResponse | null>(null);
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
+
+  // AI Mock Interview Simulator state (Voice, Chat, C++/JS Code, Timer & Report)
+  const [selectedInterviewQuestionId, setSelectedInterviewQuestionId] = useState<string>('');
+  const [interviewMessages, setInterviewMessages] = useState<InterviewMessage[]>([]);
+  const [interviewInputText, setInterviewInputText] = useState('');
+  const [interviewLanguage, setInterviewLanguage] = useState<InterviewLanguage>('javascript');
+  const [interviewCode, setInterviewCode] = useState('');
+  const [attachCodeToTurn, setAttachCodeToTurn] = useState(true);
+  const [isSendingTurn, setIsSendingTurn] = useState(false);
+  const [latestFeedback, setLatestFeedback] = useState<InterviewFeedback | null>(null);
+
+  // Session Timer state
+  const [sessionSeconds, setSessionSeconds] = useState(0);
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
+
+  // Session Report state
+  const [sessionReport, setSessionReport] = useState<InterviewReport | null>(null);
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
 
   // Section Regeneration Progress Overlay
   const [regenerationState, setRegenerationState] = useState<{
@@ -709,6 +749,156 @@ function KitWorkspaceContent() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeTab, currentCard, displayCards, isSubmittingRating, handleRecordPracticeRating]);
 
+  // Derived interview question
+  const selectedInterviewQuestion =
+    questions.find((q: any) => q.id === selectedInterviewQuestionId) || questions[0];
+
+  // Session Timer Effect
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    if (isTimerRunning) {
+      interval = setInterval(() => {
+        setSessionSeconds((prev) => prev + 1);
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isTimerRunning]);
+
+  // Initial Question Setup for Mock Interview
+  useEffect(() => {
+    if (questions && questions.length > 0 && !selectedInterviewQuestionId) {
+      const firstQ = questions[0];
+      setSelectedInterviewQuestionId(firstQ.id);
+      setInterviewMessages([
+        {
+          role: 'interviewer',
+          content: `Welcome to your AI Mock Interview! I will be evaluating your answer to: "${firstQ.prompt}". You can speak or write your answer, and use the code editor on the right for JavaScript or C++. Whenever you're ready, let me know your approach!`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        },
+      ]);
+    }
+  }, [questions, selectedInterviewQuestionId]);
+
+  function handleSelectInterviewQuestion(qId: string) {
+    setSelectedInterviewQuestionId(qId);
+    const targetQ = questions.find((q: any) => q.id === qId);
+    if (targetQ) {
+      setInterviewMessages([
+        {
+          role: 'interviewer',
+          content: `Let's work on this ${targetQ.category} question: "${targetQ.prompt}". Speak or write your explanation, and use the code editor for any JavaScript or C++ implementation. How would you solve this?`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        },
+      ]);
+      setLatestFeedback(null);
+      setSessionSeconds(0);
+      setIsTimerRunning(true);
+    }
+  }
+
+  async function handleSendInterviewTurn() {
+    const text = interviewInputText.trim();
+    const hasCode = attachCodeToTurn && interviewCode.trim().length > 0;
+    if (!text && !hasCode) return;
+
+    const currentQ = selectedInterviewQuestion || questions[0];
+    if (!currentQ) return;
+
+    const userMsg: InterviewMessage = {
+      role: 'candidate',
+      content: text || '(Submitted code solution for review)',
+      codeSnippet: hasCode ? { language: interviewLanguage, code: interviewCode } : undefined,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
+
+    const nextHistory = [...interviewMessages, userMsg];
+    setInterviewMessages(nextHistory);
+    setInterviewInputText('');
+    setIsSendingTurn(true);
+
+    if (!isTimerRunning) {
+      setIsTimerRunning(true);
+    }
+
+    try {
+      const response = await interviewApi.sendTurn(kitId, {
+        questionId: currentQ.id,
+        questionPrompt: currentQ.prompt,
+        category: currentQ.category || 'technical',
+        userMessage: text,
+        codeSnippet: hasCode ? { language: interviewLanguage, code: interviewCode } : undefined,
+        conversationHistory: nextHistory,
+      });
+
+      setInterviewMessages((prev) => [
+        ...prev,
+        {
+          role: 'interviewer',
+          content: response.interviewerReply,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        },
+      ]);
+      setLatestFeedback(response.feedback);
+    } catch (err: any) {
+      console.error('Failed to send interview turn:', err);
+      setActionNotice('Failed to communicate with AI interviewer: ' + (err.message || 'Unknown error'));
+      setTimeout(() => setActionNotice(null), 3000);
+    } finally {
+      setIsSendingTurn(false);
+    }
+  }
+
+  async function handleGenerateSessionReport() {
+    const currentQ = selectedInterviewQuestion || questions[0];
+    if (!currentQ) return;
+
+    setIsGeneratingReport(true);
+    setIsTimerRunning(false);
+
+    try {
+      const report = await interviewApi.generateReport(kitId, {
+        questionId: currentQ.id,
+        questionPrompt: currentQ.prompt,
+        category: currentQ.category || 'technical',
+        durationSeconds: sessionSeconds,
+        conversationHistory: interviewMessages,
+        codeSnippet: interviewCode.trim() ? { language: interviewLanguage, code: interviewCode } : undefined,
+      });
+
+      setSessionReport(report);
+      setShowReportModal(true);
+    } catch (err: any) {
+      console.error('Failed to generate report:', err);
+      alert('Failed to generate session report: ' + (err.message || 'Unknown error'));
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  }
+
+  function handleResetInterviewSession() {
+    setSessionSeconds(0);
+    setIsTimerRunning(false);
+    setLatestFeedback(null);
+    setInterviewCode('');
+    if (selectedInterviewQuestion) {
+      setInterviewMessages([
+        {
+          role: 'interviewer',
+          content: `Session reset. When you're ready, press Start or speak your answer to: "${selectedInterviewQuestion.prompt}".`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        },
+      ]);
+    }
+  }
+
+  function formatTimer(totalSecs: number) {
+    const mins = Math.floor(totalSecs / 60);
+    const secs = totalSecs % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }
+
   // --- Render Fallbacks ---
   if (loading && !pollProgress) {
     return (
@@ -916,6 +1106,21 @@ function KitWorkspaceContent() {
             >
               <Layers className="w-3.5 h-3.5" />
               <span>Flashcards & Practice ({flashcards.length})</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('interview')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all shrink-0 cursor-pointer ${
+                activeTab === 'interview'
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-bold shadow-md shadow-emerald-500/20'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+              }`}
+            >
+              <Mic className="w-3.5 h-3.5" />
+              <span>AI Mock Interview</span>
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                Voice & Code
+              </span>
             </button>
 
             <button
@@ -1944,6 +2149,261 @@ function KitWorkspaceContent() {
             </div>
           </div>
         )}
+
+        {/* --- TAB: AI Mock Interview (Voice, Chat, C++/JS Code & Session Report) --- */}
+        {activeTab === 'interview' && (
+          <div className="space-y-6">
+            {/* Header / Session Control Toolbar */}
+            <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 backdrop-blur shadow-xl flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-1">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-400 shrink-0 flex items-center gap-1.5">
+                  <Mic className="w-4 h-4 text-emerald-400" />
+                  Target Question:
+                </label>
+                <div className="relative flex-1 max-w-xl">
+                  <select
+                    value={selectedInterviewQuestionId}
+                    onChange={(e) => handleSelectInterviewQuestion(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs font-semibold text-slate-200 focus:outline-none focus:border-emerald-500 appearance-none pr-8 cursor-pointer"
+                  >
+                    {questions.map((q: any, idx: number) => (
+                      <option key={q.id || idx} value={q.id}>
+                        {q.category?.toUpperCase()} • {q.prompt?.length > 80 ? q.prompt.slice(0, 80) + '...' : q.prompt} (Diff {q.difficulty || 2})
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-2.5 pointer-events-none" />
+                </div>
+              </div>
+
+              {/* Timer & Session Actions */}
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Live Timer Card */}
+                <div className="flex items-center gap-2 bg-slate-950 border border-slate-800 px-3.5 py-1.5 rounded-2xl shadow-inner">
+                  <Timer className={`w-4 h-4 ${isTimerRunning ? 'text-emerald-400 animate-pulse' : 'text-slate-400'}`} />
+                  <span className="font-mono text-base font-extrabold text-white tracking-wider">
+                    {formatTimer(sessionSeconds)}
+                  </span>
+                  <button
+                    onClick={() => setIsTimerRunning(!isTimerRunning)}
+                    title={isTimerRunning ? 'Pause Session' : 'Start Timer'}
+                    className="p-1 hover:bg-slate-800 rounded-lg text-slate-300 hover:text-emerald-400 transition-colors ml-1 cursor-pointer"
+                  >
+                    {isTimerRunning ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                  </button>
+                  <button
+                    onClick={handleResetInterviewSession}
+                    title="Reset Session"
+                    className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-red-400 transition-colors cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Generate Report Button */}
+                <button
+                  disabled={isGeneratingReport || interviewMessages.length <= 1}
+                  onClick={handleGenerateSessionReport}
+                  className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-extrabold text-xs rounded-xl transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  {isGeneratingReport ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Analyzing Session...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Award className="w-4 h-4" />
+                      <span>Finish & Generate Report</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Main Interactive Split-Pane */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* Left Column: Conversational AI Interviewer & Voice Input */}
+              <div className="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 space-y-4 flex flex-col h-[760px] shadow-xl">
+                {/* Chat Header */}
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        AI Staff Interviewer
+                        <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full font-mono border border-emerald-500/20 font-normal">
+                          Live AI Voice/Chat
+                        </span>
+                      </h3>
+                      <p className="text-[11px] text-slate-400">
+                        Speaks naturally and evaluates complexity, edge cases, and code quality.
+                      </p>
+                    </div>
+                  </div>
+                  {interviewMessages.length > 0 && (
+                    <span className="text-xs font-mono text-slate-500">
+                      {interviewMessages.length} {interviewMessages.length === 1 ? 'turn' : 'turns'}
+                    </span>
+                  )}
+                </div>
+
+                {/* Chat Messages Transcript */}
+                <div className="flex-1 overflow-y-auto space-y-3.5 pr-2 custom-scrollbar">
+                  {interviewMessages.map((msg, index) => {
+                    const isAi = msg.role === 'interviewer';
+                    return (
+                      <div
+                        key={index}
+                        className={`flex gap-3 text-xs leading-relaxed ${isAi ? 'justify-start' : 'justify-end'}`}
+                      >
+                        {isAi && (
+                          <div className="w-7 h-7 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-emerald-400 shrink-0 mt-1">
+                            <Sparkles className="w-3.5 h-3.5" />
+                          </div>
+                        )}
+                        <div
+                          className={`max-w-[85%] rounded-2xl p-3.5 space-y-2 ${
+                            isAi
+                              ? 'bg-slate-950 border border-slate-800 text-slate-200'
+                              : 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-50'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-4 border-b border-white/5 pb-1">
+                            <span className="font-bold uppercase tracking-wider text-[10px] text-slate-400">
+                              {isAi ? 'Interviewer' : 'Candidate (You)'}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              {isAi && <VoiceSpeakerButton text={msg.content} />}
+                              <span className="text-[10px] font-mono text-slate-500">{msg.timestamp}</span>
+                            </div>
+                          </div>
+
+                          <div className="whitespace-pre-wrap font-sans text-xs">{msg.content}</div>
+
+                          {/* Render Attached Code Snippet if candidate attached one */}
+                          {msg.codeSnippet && msg.codeSnippet.code.trim() && (
+                            <div className="mt-2 pt-2 border-t border-slate-800/80">
+                              <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 mb-1">
+                                <span className="flex items-center gap-1 text-emerald-400">
+                                  <Code2 className="w-3 h-3" />
+                                  Attached {msg.codeSnippet.language === 'cpp' ? 'C++' : 'JavaScript'} snippet
+                                </span>
+                              </div>
+                              <pre className="bg-slate-900 border border-slate-800 p-2.5 rounded-xl font-mono text-[11px] text-emerald-200 overflow-x-auto max-h-40">
+                                {msg.codeSnippet.code}
+                              </pre>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* Latest Feedback Callout if available */}
+                  {latestFeedback && (
+                    <div className="bg-emerald-950/20 border border-emerald-500/30 rounded-2xl p-3.5 text-xs space-y-2 shadow-inner">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-emerald-400 flex items-center gap-1.5">
+                          <CheckCheck className="w-3.5 h-3.5" />
+                          Real-time Turn Rubric
+                        </span>
+                        <span className="text-xs font-mono font-extrabold bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-md border border-emerald-500/30">
+                          Score: {latestFeedback.score}/100
+                        </span>
+                      </div>
+                      {latestFeedback.strengths.length > 0 && (
+                        <div className="text-slate-300 text-[11px]">
+                          <strong className="text-emerald-300">Strengths:</strong> {latestFeedback.strengths.join(' • ')}
+                        </div>
+                      )}
+                      {latestFeedback.areasForImprovement.length > 0 && (
+                        <div className="text-slate-300 text-[11px]">
+                          <strong className="text-amber-300">Tip:</strong> {latestFeedback.areasForImprovement.join(' • ')}
+                        </div>
+                      )}
+                      {latestFeedback.codeAnalysis && (
+                        <div className="text-slate-400 text-[10px] font-mono border-t border-emerald-500/20 pt-1.5 flex gap-3">
+                          <span>Time: {latestFeedback.codeAnalysis.timeComplexity}</span>
+                          <span>Space: {latestFeedback.codeAnalysis.spaceComplexity}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {isSendingTurn && (
+                    <div className="flex items-center gap-2 text-xs text-slate-400 p-2 italic">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+                      Interviewer is analyzing your response and formulating follow-up...
+                    </div>
+                  )}
+                </div>
+
+                {/* Input Area (Text, Voice Dictation, Code Toggle & Submit) */}
+                <div className="border-t border-slate-800 pt-3 space-y-2">
+                  <div className="flex items-center justify-between text-[11px] text-slate-400">
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={attachCodeToTurn}
+                        onChange={(e) => setAttachCodeToTurn(e.target.checked)}
+                        className="rounded border-slate-700 text-emerald-500 focus:ring-0 bg-slate-950 cursor-pointer"
+                      />
+                      <span>Include current {interviewLanguage === 'cpp' ? 'C++' : 'JavaScript'} code with this turn</span>
+                    </label>
+                    <span className="text-[10px] text-slate-500">Press Enter or click Send</span>
+                  </div>
+
+                  <div className="flex items-end gap-2 bg-slate-950 border border-slate-800 rounded-2xl p-2 focus-within:border-emerald-500 transition-colors">
+                    <textarea
+                      rows={2}
+                      value={interviewInputText}
+                      onChange={(e) => setInterviewInputText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSendInterviewTurn();
+                        }
+                      }}
+                      placeholder="Type your explanation, clarify constraints, or explain your complexity..."
+                      className="flex-1 bg-transparent text-xs text-slate-100 placeholder-slate-500 resize-none focus:outline-none px-2 py-1 font-sans"
+                    />
+
+                    {/* Web Speech Voice Dictation */}
+                    <VoiceInputButton
+                      onTranscript={(spokenText) => {
+                        setInterviewInputText((prev) => (prev ? `${prev} ${spokenText}` : spokenText));
+                      }}
+                      disabled={isSendingTurn}
+                    />
+
+                    {/* Send Button */}
+                    <button
+                      disabled={isSendingTurn || (!interviewInputText.trim() && (!attachCodeToTurn || !interviewCode.trim()))}
+                      onClick={handleSendInterviewTurn}
+                      className="p-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shrink-0"
+                      title="Send message"
+                    >
+                      {isSendingTurn ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Code Editor (C++ & JavaScript) */}
+              <div className="lg:col-span-5 h-[760px] flex flex-col">
+                <CodeEditor
+                  code={interviewCode}
+                  onChange={setInterviewCode}
+                  language={interviewLanguage}
+                  onLanguageChange={setInterviewLanguage}
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </main>
 
       {/* --- MODAL: Add Manual Question --- */}
@@ -2260,6 +2720,224 @@ function KitWorkspaceContent() {
               >
                 <Trash2 className="w-4 h-4" />
                 <span>Confirm Delete</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL: Session Performance Diagnostic Report --- */}
+      {showReportModal && sessionReport && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-3xl w-full max-h-[90vh] overflow-y-auto space-y-6 shadow-2xl custom-scrollbar">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between border-b border-slate-800 pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    Comprehensive Diagnostic Report
+                  </span>
+                  <span className="text-xs font-mono text-slate-400">
+                    Duration: {sessionReport.durationFormatted}
+                  </span>
+                </div>
+                <h3 className="text-lg font-bold text-white mt-1">
+                  AI Mock Interview Diagnostic Report
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">
+                  {selectedInterviewQuestion?.prompt || 'Interview Practice Assessment'}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowReportModal(false)}
+                className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Score & Pacing Highlights */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* Overall Score */}
+              <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex flex-col items-center justify-center text-center">
+                <span className="text-xs text-slate-400 uppercase font-bold tracking-wider">Overall Score</span>
+                <div className="text-3xl font-extrabold font-mono text-emerald-400 my-1">
+                  {sessionReport.overallScore}
+                  <span className="text-base text-slate-500">/100</span>
+                </div>
+                <span className="text-[11px] text-slate-400">
+                  {sessionReport.overallScore >= 80
+                    ? 'Strong Hire Signal'
+                    : sessionReport.overallScore >= 60
+                    ? 'Solid Candidate Potential'
+                    : 'Requires Targeted Practice'}
+                </span>
+              </div>
+
+              {/* Timer Pacing Assessment */}
+              <div className="sm:col-span-2 bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-slate-400 uppercase font-bold tracking-wider flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-teal-400" />
+                    Pacing & Time Management
+                  </span>
+                  <span className="text-xs font-mono text-emerald-300 font-bold">
+                    {sessionReport.durationFormatted}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-200 leading-relaxed font-sans pt-1">
+                  {sessionReport.pacingEvaluation}
+                </p>
+              </div>
+            </div>
+
+            {/* REPEATING ERRORS & ANTI-PATTERNS (Direct User Requirement) */}
+            <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-4 space-y-2.5">
+              <div className="flex items-center gap-2 text-red-400 font-bold text-xs uppercase tracking-wider">
+                <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+                <span>Repeating Errors & Behavioral Anti-Patterns Detected</span>
+              </div>
+              {sessionReport.repeatingErrors && sessionReport.repeatingErrors.length > 0 ? (
+                <ul className="space-y-1.5 text-xs text-red-200">
+                  {sessionReport.repeatingErrors.map((errItem, idx) => (
+                    <li key={idx} className="flex items-start gap-2">
+                      <span className="text-red-400 font-bold">•</span>
+                      <span>{errItem}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-emerald-300 italic">
+                  No recurring anti-patterns detected across turns! Excellent consistency and structured execution.
+                </p>
+              )}
+            </div>
+
+            {/* Executive Summary */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Executive Performance Summary</h4>
+              <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 text-xs text-slate-200 leading-relaxed font-sans">
+                {sessionReport.executiveSummary}
+              </div>
+            </div>
+
+            {/* Strengths & Areas for Improvement */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-2">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Key Strengths
+                </h4>
+                <ul className="space-y-1.5 text-xs text-slate-300">
+                  {sessionReport.strengths.map((str, idx) => (
+                    <li key={idx} className="flex items-start gap-2">
+                      <span className="text-emerald-400 font-bold">✓</span>
+                      <span>{str}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-2">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  Recommended Improvements
+                </h4>
+                <ul className="space-y-1.5 text-xs text-slate-300">
+                  {sessionReport.areasForImprovement.map((imp, idx) => (
+                    <li key={idx} className="flex items-start gap-2">
+                      <span className="text-amber-400 font-bold">→</span>
+                      <span>{imp}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+            {/* Code Quality & Big-O Review (if code was analyzed) */}
+            {sessionReport.codeReview && (
+              <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                    <Code2 className="w-3.5 h-3.5 text-emerald-400" />
+                    Code Review & Algorithmic Complexity
+                    {sessionReport.codeReview.language && (
+                      <span className="text-[10px] font-mono text-emerald-300 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 font-normal">
+                        {sessionReport.codeReview.language === 'cpp' ? 'C++' : 'JavaScript'}
+                      </span>
+                    )}
+                  </h4>
+                  <div className="flex items-center gap-2 text-[10px] font-mono">
+                    {sessionReport.codeReview.timeComplexity && (
+                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                        Time: {sessionReport.codeReview.timeComplexity}
+                      </span>
+                    )}
+                    {sessionReport.codeReview.spaceComplexity && (
+                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                        Space: {sessionReport.codeReview.spaceComplexity}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {sessionReport.codeReview.algorithmicVerdict && (
+                  <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-800/80 text-xs">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Algorithmic Verdict</span>
+                    <p className="text-slate-300">{sessionReport.codeReview.algorithmicVerdict}</p>
+                  </div>
+                )}
+
+                {sessionReport.codeReview.syntaxAndQuality.length > 0 && (
+                  <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-800/80 text-xs">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Syntax & Code Quality Notes</span>
+                    <ul className="space-y-1 text-slate-300">
+                      {sessionReport.codeReview.syntaxAndQuality.map((note, idx) => (
+                        <li key={idx} className="flex items-start gap-2">
+                          <span className="text-teal-400 font-bold shrink-0">•</span>
+                          <span>{note}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Actionable Practice Plan */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-teal-400 flex items-center gap-1.5">
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                Actionable Next Steps / Targeted Drills
+              </h4>
+              <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-1.5">
+                {sessionReport.actionablePracticePlan.map((step, idx) => (
+                  <div key={idx} className="flex items-start gap-2.5 text-xs text-slate-300">
+                    <span className="w-4 h-4 rounded-full bg-teal-500/20 text-teal-300 flex items-center justify-center font-mono text-[10px] font-bold shrink-0 mt-0.5">
+                      {idx + 1}
+                    </span>
+                    <span>{step}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex justify-end gap-3 pt-2 border-t border-slate-800">
+              <button
+                onClick={() => {
+                  setShowReportModal(false);
+                  handleResetInterviewSession();
+                }}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 rounded-xl transition-colors cursor-pointer"
+              >
+                Reset & Try Another Question
+              </button>
+              <button
+                onClick={() => setShowReportModal(false)}
+                className="px-5 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+              >
+                Close Report
               </button>
             </div>
           </div>

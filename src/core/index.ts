@@ -79,3 +79,6 @@ export { getLatestRatingsMap, normalizeDate } from './practice/history-reducer';
 export type { ResolvedLatestRating } from './practice/history-reducer';
 export { buildSpacedRepetitionQueue } from './practice/spaced-repetition';
 export { calculateWeakSpotRadar } from './practice/weak-spot-radar';
+
+// AI Mock Interview Simulator Subsystem
+export { evaluateInterviewTurn, generateInterviewReport } from './interview/interview-evaluator';

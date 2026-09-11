@@ -9,6 +9,7 @@ import { TaroError, ErrorCode } from '@/shared';
 
 import { kitBuilderRouter } from './kit-builder.routes';
 import { kitPracticeRouter } from './kit-practice.routes';
+import { kitInterviewRouter } from './kit-interview.routes';
 
 export const kitRouter = Router();
 
@@ -17,6 +18,9 @@ kitRouter.use(kitBuilderRouter);
 
 // Mount Domain 7 Practice routes (session persistence, spaced repetition queue, weak-spot radar)
 kitRouter.use(kitPracticeRouter);
+
+// Mount AI Mock Interview Simulator routes (voice/chat turns and session reports)
+kitRouter.use(kitInterviewRouter);
 
 /**
  * POST /api/kits/generate
