@@ -2,7 +2,7 @@
 
 This runbook outlines standard development, testing, building, and evaluation workflows for the Taro monorepo.
 
-> **Current test status**: 36 test files · 314 tests · 0 failures
+> **Current test status**: 39 test files · 341 tests · 0 failures
 
 ---
 
@@ -155,3 +155,72 @@ docker logs recon-mongodb
 
 ### Clean Clone Evaluation
 - `npm run evaluate` executes directly through `tsx src/cli/evaluate.ts` without requiring any prior build step or database connection.
+
+---
+
+## 5. Kit Builder & Interactive Workspace Operations (Domain 6)
+
+Domain 6 powers candidate-level customization, section-level regeneration, and progress tracking:
+
+### Running Domain 6 Tests
+```bash
+# Test inline editing, cascading deletion, OCC version checks, and 428 confirmation gates
+npx vitest run src/api/__tests__/unit/kit-builder.test.ts
+
+# Test protected item preservation, gap subtraction math, and monotonic sequence allocation
+npx vitest run src/core/builder/__tests__/unit/regeneration-engine.test.ts
+```
+
+### Testing Kit Builder Mutations via cURL / HTTP
+All builder routes are mounted under `/api/kits/:id/` and require session authentication (`Cookie: taro_session=...`).
+
+1. **Inline Question Modification**:
+   ```bash
+   curl -X PATCH http://localhost:4000/api/kits/<KIT_ID>/questions/q1 \
+     -H "Content-Type: application/json" \
+     -b cookies.txt \
+     -d '{"prompt": "Updated question prompt?", "category": "technical", "difficulty": 3}'
+   ```
+   *Expected*: `200 OK` with `_edited: true` applied to `q1`, and the schedule re-packed if difficulty/category shifted.
+
+2. **Add Manual Hand-Crafted Question**:
+   ```bash
+   curl -X POST http://localhost:4000/api/kits/<KIT_ID>/questions \
+     -H "Content-Type: application/json" \
+     -b cookies.txt \
+     -d '{"prompt": "Custom question?", "answer_outline": "Key points", "category": "behavioural", "difficulty": 2}'
+   ```
+   *Expected*: `201 Created` with monotonic ID `qX` and `_manual: true`.
+
+3. **Trigger Single-Section Regeneration (Array Section)**:
+   ```bash
+   curl -X POST http://localhost:4000/api/kits/<KIT_ID>/regenerate \
+     -H "Content-Type: application/json" \
+     -b cookies.txt \
+     -d '{"section": "questions", "category": "technical"}'
+   ```
+   *Expected*: `202 Accepted`. Protected items (`_edited: true` or `_manual: true`) are preserved; unprotected AI items are replaced with fresh questions covering unfilled requirement gaps.
+
+4. **Trigger Singleton Regeneration (Company Brief Confirmation Gate)**:
+   ```bash
+   # If company_brief has been edited:
+   curl -X POST http://localhost:4000/api/kits/<KIT_ID>/regenerate \
+     -H "Content-Type: application/json" \
+     -b cookies.txt \
+     -d '{"section": "company_brief"}'
+   ```
+   *Expected*: `428 Precondition Required` (`CONFIRMATION_REQUIRED`) prompting the candidate with an overwrite warning modal.
+   
+   *Confirming Overwrite*:
+   ```bash
+   curl -X POST http://localhost:4000/api/kits/<KIT_ID>/regenerate \
+     -H "Content-Type: application/json" \
+     -b cookies.txt \
+     -d '{"section": "company_brief", "force": true}'
+   ```
+   *Expected*: `202 Accepted`. Brief regenerated and `_edited` reset to `false` only upon successful commit.
+
+5. **Optimistic Concurrency Control (OCC) Protection**:
+   - Every mutation payload accepts `expectedVersion: number`.
+   - If another tab or concurrent action updated the document version `__v`, the mutation is rejected with `409 Conflict` (`CONCURRENT_MODIFICATION`), preventing dirty overwrites.
+

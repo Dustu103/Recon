@@ -16,10 +16,11 @@ taro/
 ├── src/
 │   ├── shared/                # Foundation: Types, Appendix A Schemas, Frozen Error Enum, ID Generator
 │   ├── core/                  # Headless Domain Logic: Crawler, LLM Client, Pipeline Steps, Deterministic Math
-│   ├── api/                   # HTTP & Persistence: Express Server, Auth Routes, Kit Lifecycle, Polling Progress
+│   │   └── builder/           # D6 Regeneration Engine: Protected item merge, gap subtraction, monotonic IDs
+│   ├── api/                   # HTTP & Persistence: Express Server, Auth Routes, Kit Lifecycle, Kit Builder Mutations
 │   └── cli/                   # Batch Evaluation CLI: "npm run evaluate -- --input ... --output ..."
 ├── apps/
-│   └── web/                   # Frontend Workspace: Next.js 14, Tailwind CSS, Interactive Builder
+│   └── web/                   # Frontend Workspace: Next.js 14, Tailwind CSS, Interactive Builder Tabs & Modals
 └── tests/
     └── cli/fixtures/          # Evaluation test cases fixtures
 ```
@@ -89,7 +90,7 @@ A single root `tsconfig.json` provides strict typechecking, output generation (`
 
 | Command | Purpose |
 | :--- | :--- |
-| `npm test` | Runs all 36 test files and 314 unit and integration tests across the unified tree in a single Vitest pass |
+| `npm test` | Runs all 39 test files and 341 unit and integration tests across the unified tree in a single Vitest pass |
 | `npm run test:shared` | Runs unit tests for schemas, error codes, and ID generator |
 | `npm run test:core` | Runs crawler, link-ranker, and deterministic tests |
 | `npm run test:api` | Runs Express API and database integration tests |

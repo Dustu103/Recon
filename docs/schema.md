@@ -86,9 +86,36 @@ Every interview prep kit produced by Taro must conform strictly to the Appendix 
 | `questions[].id` | `string` | Pattern `/^q\d+$/` (e.g. `q1`, `q2`) | Stable ID integrity |
 | `questions[].difficulty` | `number` | Literal `1 \| 2 \| 3` (no floats) | Exact integer scale |
 | `questions[].category` | `string` | `'technical' \| 'behavioural' \| 'system-design' \| 'company-fit'` | Categorized bank |
+| `questions[]._edited` | `boolean` (optional) | Present when customized via inline editor | Preserves item during regeneration |
+| `questions[]._manual` | `boolean` (optional) | Present when inserted manually by candidate | Preserves item during regeneration |
+| `flashcards[]._edited` | `boolean` (optional) | Present when customized via inline editor | Preserves card during regeneration |
+| `flashcards[]._manual` | `boolean` (optional) | Present when inserted manually by candidate | Preserves card during regeneration |
+| `company_brief._edited` | `boolean` (optional) | Present when customized via inline editor | Enforces 428 confirmation gate |
 | `schedule.days[].minutes` | `number` | Integer only (non-negative) | Float durations fail |
 | `schedule.days_available` | `number` | Integer 1 to 60 | Must match `schedule.days.length` |
 | `coverage.passes` | `number` | Integer >= 1 | Number of loop passes |
+
+---
+
+## Domain 5 & 6 Persistence & Progress Extensions
+
+In addition to the Appendix A JSON document, the MongoDB kit document (`IKit`) maintains stateful metadata for workspace interactivity:
+
+```typescript
+export interface IKitProgress {
+  notes?: Record<string, string>;              // Practice STAR notes keyed by question ID (e.g. { "q1": "..." })
+  starred?: string[];                         // Array of bookmarked question IDs (e.g. ["q1", "q4"])
+  flashcardMastery?: Record<string, string>;  // Card mastery status (e.g. { "f1": "mastered" })
+  completedDays?: number[];                   // Checked-off study schedule days (e.g. [1, 2])
+}
+```
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `nextQuestionIndex` | `number` | `1` | Monotonic counter for allocating non-colliding `qX` IDs across manual additions and regenerations. |
+| `nextFlashcardIndex`| `number` | `1` | Monotonic counter for allocating non-colliding `fX` IDs across manual additions and regenerations. |
+| `progress` | `IKitProgress` | `{ notes: {}, starred: [], flashcardMastery: {}, completedDays: [] }` | Workspace candidate progress state updated via `PATCH /api/kits/:id/candidate-progress`. |
+| `__v` | `number` | `0` | Mongoose OCC version key evaluated on mutations to prevent race conditions. |
 
 ---
 
@@ -186,6 +213,8 @@ Every failure across the Taro platform is mapped to a canonical, frozen `ErrorCo
 | `NOT_FOUND` | System | 404 | Unknown API endpoint or unowned kit ID |
 | `KIT_NOT_FOUND` | Access (D5)| 404 | Kit does not exist or candidate is not owner |
 | `USER_EXISTS` | Auth (D1) | 409 | Candidate already registered with specified email address |
+| `CONCURRENT_MODIFICATION` | Concurrency (D6) | 409 | OCC version collision (`__v` mismatch) during write race |
+| `CONFIRMATION_REQUIRED` | Gate (D6) | 428 | Attempted destructive overwrite of customized singleton (`company_brief`) without `force: true` |
 | `AUTH_RATE_LIMITED` | Auth (D1) | 429 | Exceeded 20 req/min burst or 5 failed logins per 15 min |
 | `LLM_RATE_LIMITED` | LLM | 429 | Upstream AI provider returned 429 after 4 exponential backoff retries |
 | `COMPANY_UNREACHABLE` | Crawler | 502 | Target company DNS failure, network drop, or server 5xx |
@@ -194,7 +223,7 @@ Every failure across the Taro platform is mapped to a canonical, frozen `ErrorCo
 | `TIMEOUT` | Network | 504 | Scrape request exceeded 8-second HTTP timeout |
 | `SCHEDULE_ALLOCATION_FAILED`| Math | 500 | Linear programming / greedy day packing failed constraint |
 | `CASE_FAILED` | Batch CLI | 500 | Evaluation case failure recorded in Appendix B envelope |
-| `GENERATION_IN_PROGRESS`| Concurrency | 500 | Duplicate concurrent generation triggered for kit |
+| `GENERATION_IN_PROGRESS`| Lifecycle (D5) | 500 | Duplicate concurrent generation triggered for kit |
 | `INTERNAL_ERROR` | System | 500 | Unhandled runtime exception |
  
 ---
