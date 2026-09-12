@@ -239,8 +239,19 @@ export async function getRedisClient(): Promise<IRedisClient> {
     return activeRedisClient;
   }
 
-  const host = process.env.REDIS_HOST || '127.0.0.1';
-  const port = parseInt(process.env.REDIS_PORT || '6379', 10);
+  let host = process.env.REDIS_HOST || '127.0.0.1';
+  let port = parseInt(process.env.REDIS_PORT || '6379', 10);
+
+  if (process.env.REDIS_URL) {
+    try {
+      const sanitized = process.env.REDIS_URL.trim().replace(/^["']|["']$/g, '');
+      const parsed = new URL(sanitized);
+      if (parsed.hostname) host = parsed.hostname;
+      if (parsed.port) port = parseInt(parsed.port, 10);
+    } catch {
+      // keep host/port defaults
+    }
+  }
 
   // Attempt connection with 1500ms timeout
   const candidate = new SocketRedisClient(host, port);
