@@ -160,7 +160,7 @@
   - Point to `r1 (REST & API Architecture)` showing `100% Readiness` in green.
   - Explain the Zero-Overstatement denominator formula.
   - Open the **"AI Mock Interview"** simulator drawer.
-  - Show the live Web Speech voice prompt synthesis, microphone recording, and polyglot code workspace with clean LeetCode skeletons (JavaScript, Python, C++, SQL).
+  - Click **"Start 1-on-1 Voice Call"** to demonstrate the realistic two-way conversational voice interview: show the live AI interviewer audio equalizer bars dancing as the AI speaks the question, the echo-safe microphone handoff, and the live candidate speech-to-text transcript.
   - Demonstrate the **LeetCode Test Cases Panel** with copyable inputs/expected outputs and click the green **"Run & Check"** button to show real-time AI solution validation with execution verdicts (`Accepted`), test case pass counters (`2/2 Passed`), and Big-O complexity profiling.
   - Run the evaluation CLI in terminal:
     ```bash
@@ -174,7 +174,7 @@
   > 
   > *Traditional flashcards tell you which cards you missed. Our Radar maps every flashcard rating directly back to the original Job Requirements. Using our mathematically verified zero-overstatement formula, unpracticed cards count as zero in the numerator while fully expanding the denominator. If a must-have skill is under-practiced, a Danger Zone alert flags the critical blind spot before the real interview.*
   > 
-  > *We've also integrated an interactive AI Mock Interview studio with browser speech synthesis, voice transcription, a polyglot code workspace with clean LeetCode skeletons, and an automated test case runner that evaluates candidate code for functional correctness, boundary edge cases, and Big-O runtime/memory complexity with real-time Accepted verdicts.*
+  > *We've also built a true 1-on-1 Live Voice Interview call with real-time audio equalizers, natural speech synthesis, and echo-suppressed hands-free dialogue. Candidates can speak naturally with the AI interviewer, write code in our clean polyglot workspace, and run automated LeetCode test cases with real-time Accepted verdicts and Big-O profiling.*
   > 
   > *And under the hood, our batch CLI runner `npm run evaluate` executes the exact same core pipeline headless, producing Appendix B-compliant output in under 5 minutes for 5 test cases.*
   > 

@@ -234,3 +234,22 @@ export interface InterviewFeedback {
 - **`POST /api/kits/:id/interview/turn`**: Submits user voice/text transcript and code snippet for turn-by-turn AI interviewer response, rubric feedback, and test case execution verdict.
 - **`POST /api/kits/:id/interview/report`**: Analyzes the complete session transcript and code history to generate a comprehensive multi-criteria diagnostic report (`InterviewReport`).
 
+### 6.7 Dedicated 1-on-1 Live Voice Interview Call System
+To replicate an authentic one-to-one interview screen with a Staff Software Engineer, Recon provides a dedicated **1-on-1 Live Voice Call Mode** (`apps/web/src/components/one-on-one-voice-interview.tsx`) that operates directly alongside the code workspace and test case panel:
+
+1. **Live Audio Presence & Equalizers**:
+   - **AI Interviewer Visualizer**: Animated multi-frequency audio equalizer bars that oscillate in real-time when the AI is speaking.
+   - **Candidate Audio Wave**: Reactive microphone wave reflecting candidate voice activity during explanations.
+   - **Status Badges**: Real-time indicators (`Speaking`, `Listening to you`, `Formulating response`, `Microphone Muted`).
+
+2. **Hands-Free Conversational Loop & Echo Suppression**:
+   - **Auto-Speech Playback**: The AI interviewer's replies are spoken aloud automatically using the browser's native `SpeechSynthesisUtterance`, selecting natural human voices (`Natural`, `Google US English`, `Samantha`, or `Daniel`).
+   - **Acoustic Handoff (Echo Shield)**: While the AI is speaking, the candidate's speech recognition is paused to eliminate speaker-to-microphone feedback loops.
+   - **Auto-Listen Handoff**: Once the AI finishes speaking, candidate microphone recognition automatically resumes in hands-free mode.
+   - **Push-to-Talk Mode**: Candidates can toggle between continuous hands-free dialogue and push-to-talk.
+
+3. **Live Subtitles & Real-Time Spoken Transcripts**:
+   - Displays real-time interim speech-to-text as the candidate speaks.
+   - Simultaneously keeps the code editor and test case runner active, allowing candidates to explain their architecture aloud while coding or running test cases.
+
+

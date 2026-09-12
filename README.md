@@ -322,7 +322,8 @@ If a requirement has 3 linked cards and the candidate only practices 1 card, rat
 - **Danger Zone Alert**: Any `must` requirement with readiness $< 50\%$ or with unpracticed cards immediately displays an amber/red **DANGER ZONE** badge on the dashboard.
 
 #### Interactive AI Mock Interview Studio
-- **Voice Synthesis & Recognition**: Real-time verbal interview simulations using native Web Speech API synthesis and speech-to-text transcription.
+- **1-on-1 Live Voice Call Mode**: Dedicated hands-free conversational interview call with animated multi-bar audio equalizers, live subtitle streaming, and echo-suppressed speech handoff.
+- **Voice Synthesis & Recognition**: Natural speech synthesis with preferred voice selection (Google US English, Samantha, Daniel) and real-time Web Speech recognition.
 - **Clean Polyglot Code Workspace**: Minimal function/class starter skeletons across JavaScript, Python, C++, and SQL, strictly free from pre-written mock schemas or dummy solutions.
 - **LeetCode Test Cases & Execution Engine**: Interactive split-case runner (`Case 1`, `Case 2`) with copyable inputs and expected outputs, standalone **"Run & Check"** test runner, and real-time execution verdicts (`Accepted`, `Wrong Answer`, `Needs Revision`), test pass counts (`2/2 Passed`), and Big-O runtime/memory complexity analysis.
 - **Repeating Error Analysis**: Tracks common deficiencies across sessions to identify recurring behavioral and technical weaknesses.
