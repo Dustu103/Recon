@@ -20,6 +20,7 @@ import {
 import { VoiceInputButton } from '../../../../components/voice-input-button';
 import { VoiceSpeakerButton } from '../../../../components/voice-speaker-button';
 import { LeetCodeProblemCard, TestCasePanel } from '../../../../components/leetcode-testcases';
+import { OneOnOneVoiceInterview } from '../../../../components/one-on-one-voice-interview';
 import {
   QuestionCategory,
   InterviewLanguage,
@@ -69,6 +70,7 @@ import {
   CheckCheck,
   BarChart3,
   Timer,
+  Phone,
 } from 'lucide-react';
 
 function KitWorkspaceContent() {
@@ -150,6 +152,7 @@ function KitWorkspaceContent() {
   // AI Mock Interview Simulator state (Voice, Chat, C++/JS Code, Timer & Report)
   const [selectedInterviewQuestionId, setSelectedInterviewQuestionId] = useState<string>('');
   const [interviewMessages, setInterviewMessages] = useState<InterviewMessage[]>([]);
+  const [isVoiceCallMode, setIsVoiceCallMode] = useState(false);
   const [interviewInputText, setInterviewInputText] = useState('');
   const [interviewLanguage, setInterviewLanguage] = useState<InterviewLanguage>('javascript');
   const [interviewCode, setInterviewCode] = useState<string>(JS_STARTER);
@@ -1013,6 +1016,57 @@ function KitWorkspaceContent() {
     }
   }
 
+  async function handleSendVoiceTurn(spokenText: string) {
+    const text = spokenText.trim();
+    const hasCode = interviewCode.trim().length > 0;
+    if (!text && !hasCode) return;
+
+    const currentQ = selectedInterviewQuestion || questions[0];
+    if (!currentQ) return;
+
+    const userMsg: InterviewMessage = {
+      role: 'candidate',
+      content: text || '(Shared code solution during voice call)',
+      codeSnippet: hasCode ? { language: interviewLanguage, code: interviewCode } : undefined,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
+
+    const nextHistory = [...interviewMessages, userMsg];
+    setInterviewMessages(nextHistory);
+    setIsSendingTurn(true);
+
+    if (!isTimerRunning) {
+      setIsTimerRunning(true);
+    }
+
+    try {
+      const response = await interviewApi.sendTurn(kitId, {
+        questionId: currentQ.id,
+        questionPrompt: currentQ.prompt,
+        category: currentQ.category || 'technical',
+        userMessage: userMsg.content,
+        codeSnippet: hasCode ? { language: interviewLanguage, code: interviewCode } : undefined,
+        conversationHistory: nextHistory,
+      });
+
+      setInterviewMessages((prev) => [
+        ...prev,
+        {
+          role: 'interviewer',
+          content: response.interviewerReply,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        },
+      ]);
+      setLatestFeedback(response.feedback);
+    } catch (err: any) {
+      console.error('Failed to send voice turn:', err);
+      setActionNotice('Voice call error: ' + (err.message || 'Unknown error'));
+      setTimeout(() => setActionNotice(null), 3000);
+    } finally {
+      setIsSendingTurn(false);
+    }
+  }
+
   async function handleGenerateSessionReport() {
     const currentQ = selectedInterviewQuestion || questions[0];
     if (!currentQ) return;
@@ -1153,6 +1207,12 @@ function KitWorkspaceContent() {
       </div>
     );
   }
+
+  const lastInterviewerMessage =
+    [...interviewMessages].reverse().find((m) => m.role === 'interviewer')?.content ||
+    (selectedInterviewQuestion
+      ? `Welcome to your 1-on-1 interview! Let's discuss this ${selectedInterviewQuestion.category || 'technical'} question: "${selectedInterviewQuestion.prompt}". How would you solve this?`
+      : '');
 
   const isPending = kitDetail?.status === 'pending' || (pollProgress && pollProgress.status === 'pending');
 
@@ -2618,6 +2678,24 @@ function KitWorkspaceContent() {
                   </button>
                 </div>
 
+                {/* 1-on-1 Live Voice Call Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setIsVoiceCallMode(!isVoiceCallMode)}
+                  className={`px-4 py-2 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 cursor-pointer shadow-lg ${
+                    isVoiceCallMode
+                      ? 'bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 shadow-emerald-500/30 ring-2 ring-emerald-400'
+                      : 'bg-slate-950 border border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-400'
+                  }`}
+                  title={isVoiceCallMode ? 'Currently in 1-on-1 Voice Call' : 'Start Live 1-on-1 Voice Call'}
+                >
+                  <Phone className="w-3.5 h-3.5" />
+                  <span>{isVoiceCallMode ? '1-on-1 Call Active' : 'Start 1-on-1 Voice Call'}</span>
+                  {isVoiceCallMode && (
+                    <span className="w-2 h-2 rounded-full bg-slate-950 animate-ping" />
+                  )}
+                </button>
+
                 {/* Generate Report Button */}
                 <button
                   disabled={isGeneratingReport || interviewMessages.length <= 1}
@@ -2638,6 +2716,24 @@ function KitWorkspaceContent() {
                 </button>
               </div>
             </div>
+
+            {/* 1-on-1 Live Voice Call Experience Panel */}
+            {isVoiceCallMode && (
+              <OneOnOneVoiceInterview
+                isOpen={isVoiceCallMode}
+                onClose={() => setIsVoiceCallMode(false)}
+                interviewerMessage={lastInterviewerMessage}
+                isSendingTurn={isSendingTurn}
+                onSendVoiceTurn={handleSendVoiceTurn}
+                companyName={kitDetail?.kit?.source?.company || (kitDetail as any)?.companyName || 'Target Company'}
+                roleTitle={kitDetail?.kit?.role?.title || (kitDetail as any)?.roleTitle || 'Software Engineer'}
+                questionPrompt={selectedInterviewQuestion?.prompt}
+                category={selectedInterviewQuestion?.category}
+                latestFeedback={latestFeedback}
+                codeSnippet={interviewCode.trim() ? { language: interviewLanguage, code: interviewCode } : undefined}
+                onRunCode={handleRunCodeCheck}
+              />
+            )}
 
             {/* Target Question LeetCode Problem Card */}
             {selectedInterviewQuestion && (
