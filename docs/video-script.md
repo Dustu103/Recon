@@ -160,7 +160,8 @@
   - Point to `r1 (REST & API Architecture)` showing `100% Readiness` in green.
   - Explain the Zero-Overstatement denominator formula.
   - Open the **"AI Mock Interview"** simulator drawer.
-  - Show the live Web Speech voice prompt synthesis, microphone recording, and integrated code editor (Monaco/syntax highlighted) supporting C++, Python, and JavaScript.
+  - Show the live Web Speech voice prompt synthesis, microphone recording, and polyglot code workspace with clean LeetCode skeletons (JavaScript, Python, C++, SQL).
+  - Demonstrate the **LeetCode Test Cases Panel** with copyable inputs/expected outputs and click the green **"Run & Check"** button to show real-time AI solution validation with execution verdicts (`Accepted`), test case pass counters (`2/2 Passed`), and Big-O complexity profiling.
   - Run the evaluation CLI in terminal:
     ```bash
     npm run evaluate -- --input tests/cli/fixtures/test-cases.json --output tmp/kits.json --mock
@@ -173,16 +174,17 @@
   > 
   > *Traditional flashcards tell you which cards you missed. Our Radar maps every flashcard rating directly back to the original Job Requirements. Using our mathematically verified zero-overstatement formula, unpracticed cards count as zero in the numerator while fully expanding the denominator. If a must-have skill is under-practiced, a Danger Zone alert flags the critical blind spot before the real interview.*
   > 
-  > *We've also integrated an interactive AI Mock Interview studio with browser speech synthesis, voice transcription, and an embedded code editor.*
+  > *We've also integrated an interactive AI Mock Interview studio with browser speech synthesis, voice transcription, a polyglot code workspace with clean LeetCode skeletons, and an automated test case runner that evaluates candidate code for functional correctness, boundary edge cases, and Big-O runtime/memory complexity with real-time Accepted verdicts.*
   > 
   > *And under the hood, our batch CLI runner `npm run evaluate` executes the exact same core pipeline headless, producing Appendix B-compliant output in under 5 minutes for 5 test cases.*
   > 
-  > *Recon delivers 100% test coverage across 369 unit and integration tests, strict TypeScript types, zero parallel implementations, and production-ready resilience. Thank you."*
+  > *Recon delivers 100% test coverage across 380 unit and integration tests, strict TypeScript types, zero parallel implementations, and production-ready resilience. Thank you."*
 
 * **Architectural Invariants Highlighted**:
   - Weak-Spot Gap Radar formula: `readiness = sum(ratings) / (N * 3) * 100` (unpracticed = 0 numerator, $N \times 3$ denominator).
+  - Polyglot Code Workspace with clean LeetCode skeletons & real-time test case execution verdicts (`Accepted` / `Wrong Answer` / `Needs Revision`).
   - Headless CLI sharing identical `generateKit` pipeline with web server.
-  - 100% hermetic test suite (369 tests, 45 test files passing).
+  - 100% hermetic test suite (380 tests, 45 test files passing).
   - Appendix B JSON schema compliance.
 
 ---

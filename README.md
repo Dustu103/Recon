@@ -323,7 +323,8 @@ If a requirement has 3 linked cards and the candidate only practices 1 card, rat
 
 #### Interactive AI Mock Interview Studio
 - **Voice Synthesis & Recognition**: Real-time verbal interview simulations using native Web Speech API synthesis and speech-to-text transcription.
-- **Embedded Code Editor**: Monaco-powered code editor supporting C++, Python, and JavaScript for algorithmic and distributed systems questions.
+- **Clean Polyglot Code Workspace**: Minimal function/class starter skeletons across JavaScript, Python, C++, and SQL, strictly free from pre-written mock schemas or dummy solutions.
+- **LeetCode Test Cases & Execution Engine**: Interactive split-case runner (`Case 1`, `Case 2`) with copyable inputs and expected outputs, standalone **"Run & Check"** test runner, and real-time execution verdicts (`Accepted`, `Wrong Answer`, `Needs Revision`), test pass counts (`2/2 Passed`), and Big-O runtime/memory complexity analysis.
 - **Repeating Error Analysis**: Tracks common deficiencies across sessions to identify recurring behavioral and technical weaknesses.
 
 #### Known Trade-Offs & Limitations
@@ -334,10 +335,10 @@ If a requirement has 3 linked cards and the candidate only practices 1 card, rat
 
 ## Verification & Testing
 
-Recon maintains a 100% pass rate across **378 unit and integration tests** spanning 45 test files:
+Recon maintains a 100% pass rate across **380 unit and integration tests** spanning 45 test files:
 
 ```bash
-npm test              # Run all 378 tests hermetically (~3.5s)
+npm test              # Run all 380 tests hermetically (~3.5s)
 npm run test:shared   # Test Appendix A & B schemas, error registry, ID generators
 npm run test:core     # Test crawler, link ranker, SSRF shield, LLM pipeline, coverage math
 npm run test:api      # Test Express endpoints, Redis OTP, auth, kit lifecycle, mutations
@@ -357,7 +358,7 @@ npm run test:cli      # Test evaluation CLI runner and Appendix B outputs
 | **D4: Deterministic** | Math & Scheduling | **Complete** | Coverage checker distinguishing must vs. nice-to-have gaps, bounded 2-pass gap repair, difficulty-first study scheduler `(difficulty DESC, isMust DESC, id ASC)` preserving front-loading invariant. |
 | **D5: Kit Lifecycle** | Persistence, Polling & Resilience | **Complete** | 202 Accepted async dispatch, 2.5s HTTP polling progress engine, sub-millisecond in-memory cache with durable DB checkpoints, SHA-256 idempotent deduplication, crash-safe `failKit`, 15-min background stale reaper. |
 | **D6: Builder** | Interactive Editor & Regeneration | **Complete** | Granular inline editing for questions/brief/flashcards, manual additions (`_manual`), non-destructive reordering, single-section regeneration with protected item preservation, singleton confirmation gate (`428 CONFIRMATION_REQUIRED`), OCC versioning (`409 CONCURRENT_MODIFICATION`), and candidate progress tracking. |
-| **D7: Practice & Creative Feature** | Flashcards, Spaced Repetition & Radar | **Complete** | Distraction-free study deck (Spacebar 3D flip, ergonomic hotkeys 1-3/arrows), 3-tier confidence rating persistence in MongoDB `practiceHistory[]`, confidence-weighted spaced repetition urgency queue with infinite unpracticed weight and temporal decay, signature Weak-Spot Gap Radar linking recall back to JD requirements with zero-overstatement guarantee, strict Danger Zone alert banner on unpracticed must-haves, Day focus session timer, and cross-tab question deep-linking. |
+| **D7: Practice & Creative Feature** | Flashcards, Spaced Repetition, Radar & Mock Interview | **Complete** | Distraction-free study deck (Spacebar 3D flip, ergonomic hotkeys 1-3/arrows), 3-tier confidence rating persistence in MongoDB `practiceHistory[]`, confidence-weighted spaced repetition urgency queue with infinite unpracticed weight and temporal decay, signature Weak-Spot Gap Radar linking recall back to JD requirements with zero-overstatement guarantee, strict Danger Zone alert banner on unpracticed must-haves, Day focus session timer, and AI Mock Interview Studio with clean LeetCode polyglot code skeletons (JS, Python, C++, SQL), standalone "Run & Check" test case runner, real-time AI execution verdicts (`Accepted`, `Wrong Answer`, `Needs Revision`), and Big-O complexity profiling. |
 | **D8: Evaluation** | Appendix B Orchestration | **Complete** | Batch evaluation CLI runner (`npm run evaluate`), Appendix B schema compliance, per-case fault isolation, localhost autograder support (`TARO_CLI_MODE='evaluate'`), hermetic `--mock` flag for offline evaluation. |
 | **D9: Release** | Production Hardening & Deployment | **Complete** | Production `render.yaml` backend descriptor, Vercel `apps/web/vercel.json` descriptor with API rewrites, live `/api/health` check with db/llm diagnostics, timed 3–4 min walkthrough script (`docs/video-script.md`), deployment runbooks, and 9-topic architectural defense. |
 

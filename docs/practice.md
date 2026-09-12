@@ -170,3 +170,67 @@ Retrieves current queue and Weak-Spot Radar diagnostics.
 
 - **Query Parameters**: `filter` (`'all'` | `'shaky'` | `'unpracticed'`).
 - **Response** (`200 OK`): Returns sorted queue cards and requirement readiness analytics.
+
+---
+
+## 6. AI Mock Interview Simulator & LeetCode Test Case Engine
+
+In addition to flashcard recall, Domain 7 incorporates a live **AI Mock Interview Simulator** (`apps/web/src/app/(app)/kits/[id]/page.tsx`) equipped with voice synthesis/recognition, a polyglot code editor, LeetCode-style test cases, and a multi-stage solution evaluation engine.
+
+### 6.1 Polyglot Code Workspace with Clean LeetCode Skeletons
+The code editor (`apps/web/src/components/code-editor.tsx`) provides an IDE-like interface with syntax highlighting, line numbers, auto-indentation, and per-language buffer persistence across:
+- **JavaScript**: Minimal `function solution() { }` skeleton.
+- **Python**: Minimal `class Solution: def solve(self): pass` skeleton.
+- **C++**: Clean `#include <...>` headers with `class Solution { public: void solve() {} };`.
+- **SQL**: Clean `-- Write your SQL solution or schema DDL below\n\n`.
+
+> **LeetCode Design Invariant**: All starter templates are strictly clean function/class signatures. They contain zero dummy schemas, example tables, or pre-written mock solutions, ensuring candidates write authentic implementations from scratch.
+
+### 6.2 LeetCode-Style Problem Presentation & Test Case Panel
+Technical and database questions are formatted according to industry competitive programming standards:
+- **`LeetCodeProblemCard`** (`apps/web/src/components/leetcode-testcases.tsx`): Displays the core problem description, formatted `Example 1:` and `Example 2:` callout cards (with `Input:`, `Output:`, and `Explanation:`), and explicit `Constraints:`.
+- **`TestCasePanel`**: Interactive split-case runner with tabs (`Case 1`, `Case 2`, etc.) featuring copyable dark-mode monospace `Input` and `Expected Output` boxes.
+
+### 6.3 Standalone "Run & Check" vs. Conversational Voice Turns
+Candidates evaluate their code through two distinct interaction models:
+1. **Instant "Run & Check"**: Candidates click the green **"Run & Check"** play button in the code toolbar to evaluate their solution directly against test cases without submitting conversational text.
+2. **Conversational Turn with Code**: Candidates attach their code to an interview message (spoken via Web Speech microphone or typed) to defend their architectural choices, explain time complexity, and discuss trade-offs with the AI interviewer.
+
+### 6.4 Solution Verification Mechanics (How "Right vs. Wrong" is Evaluated)
+When code is submitted to `POST /api/kits/:id/interview/turn`, the backend AI evaluator (`src/core/interview/interview-evaluator.ts`) performs deterministic rubric scoring across four dimensions:
+
+1. **Functional Correctness**: Executes logic tracing against the problem's sample inputs and expected deterministic outputs.
+2. **Edge Case Coverage**: Validates handling of boundary limits, empty collections, negative values, single-element collections, and null pointer safety.
+3. **Algorithmic Complexity**: Measures whether the algorithm satisfies asymptotic Big-O constraints (e.g. $O(N)$ linear time vs. $O(N^2)$ quadratic brute-force).
+4. **SQL/Relational Validity**: For database questions, verifies DDL schema integrity, primary/foreign key definitions, data types, indexing strategies (B-Tree vs. GIN), and query execution efficiency (window functions, partitions).
+
+### 6.5 Execution Verdicts & Feedback Schema
+The evaluator returns structured feedback adhering to `InterviewFeedbackSchema` (`src/shared/schemas/interview.schema.ts`):
+
+```typescript
+export interface InterviewFeedback {
+  score?: number; // Integer 1-10 rating
+  verdict?: 'Accepted' | 'Wrong Answer' | 'Needs Revision';
+  testCasesPassed?: number; // e.g. 2
+  totalTestCases?: number; // e.g. 2
+  strengths: string[];
+  areasForImprovement: string[];
+  codeAnalysis?: {
+    timeComplexity: string; // e.g. "O(N)"
+    spaceComplexity: string; // e.g. "O(1)"
+    suggestions: string[];
+  };
+  isComplete: boolean;
+}
+```
+
+#### Verdict Display in UI:
+- 🟢 **Accepted**: Displayed when the solution passes all test cases and complexity limits. Includes a green pass counter (`2 / 2 Test Cases Passed`), numerical score, and runtime/memory badges.
+- 🔴 **Wrong Answer**: Displayed when the solution fails core logic, with specific failed test case notes and edge cases to reconsider.
+- 🟡 **Needs Revision**: Displayed for partial solutions or suboptimal time/space complexity.
+- **Per-Case Visual Status**: Each test case tab (`Case 1`, `Case 2`) displays a green check or red dot indicating the pass/fail status of that specific test case.
+
+### 6.6 Interview Endpoints
+- **`POST /api/kits/:id/interview/turn`**: Submits user voice/text transcript and code snippet for turn-by-turn AI interviewer response, rubric feedback, and test case execution verdict.
+- **`POST /api/kits/:id/interview/report`**: Analyzes the complete session transcript and code history to generate a comprehensive multi-criteria diagnostic report (`InterviewReport`).
+

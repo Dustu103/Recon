@@ -258,6 +258,50 @@ All schemas are exported from `@taro/shared` with corresponding TypeScript types
 | `BatchInputSchema` | `BatchInputCase[]`| Top-level array of cases for batch evaluation |
 | `BatchOutputSchema` | `BatchOutput` | Top-level envelope for Appendix B evaluation output |
 | `PracticeConfidenceSchema` | `PracticeConfidence` | D7: Confidence ratings 1, 2, or 3 (`shaky`, `good`, `mastered`) |
-| `PracticeRatingItemSchema` | `PracticeRatingItem` | D7: Single card practice rating with timestamp |
 | `PracticeSessionInputSchema`| `PracticeSessionInput` | D7: Request body for recording practice session ratings |
 | `CONFIDENCE_MAP` | `Record<1|2|3, 'shaky'|'good'|'mastered'>` | D7: Canonical mapping from numeric rating to label |
+| `InterviewLanguageSchema` | `InterviewLanguage` | D7: Supported languages: `'javascript' \| 'python' \| 'cpp' \| 'sql'` |
+| `InterviewTurnInputSchema` | `InterviewTurnInput` | D7: Payload for turn-by-turn interview simulation (message, language, code, history) |
+| `InterviewFeedbackSchema` | `InterviewFeedback` | D7: Evaluator verdict (`Accepted`, `Wrong Answer`, `Needs Revision`), test pass counts, score, Big-O complexity |
+| `InterviewTurnResponseSchema`| `InterviewTurnResponse`| D7: AI interviewer conversational reply and structured rubric feedback |
+| `InterviewReportSchema` | `InterviewReport` | D7: Final multi-criteria session diagnostic report and actionable recommendations |
+
+---
+
+## AI Mock Interview Contracts (Domain 7)
+
+### `InterviewFeedbackSchema`
+
+```json
+{
+  "score": 8,
+  "verdict": "Accepted",
+  "testCasesPassed": 2,
+  "totalTestCases": 2,
+  "strengths": [
+    "Clean modular decomposition",
+    "Optimal linear time complexity O(N)"
+  ],
+  "areasForImprovement": [
+    "Consider handling boundary overflow for extreme integer limits"
+  ],
+  "codeAnalysis": {
+    "timeComplexity": "O(N)",
+    "spaceComplexity": "O(1)",
+    "suggestions": [
+      "Could use two-pointer technique to eliminate hash map memory overhead"
+    ]
+  },
+  "isComplete": true
+}
+```
+
+| Field | Type | Invariant / Range | Description |
+|---|---|---|---|
+| `score` | `number` (optional) | Integer `1` to `10` | Real-time performance score for the current question |
+| `verdict` | `enum` (optional) | `'Accepted' \| 'Wrong Answer' \| 'Needs Revision'` | LeetCode-style execution verdict |
+| `testCasesPassed` | `number` (optional) | Non-negative integer | Count of test cases successfully validated |
+| `totalTestCases` | `number` (optional) | Integer >= 1 | Total test cases / criteria checked |
+| `codeAnalysis.timeComplexity` | `string` | Asymptotic Big-O string (e.g. `"O(N)"`, `"O(log N)"`) | Algorithmic runtime complexity |
+| `codeAnalysis.spaceComplexity`| `string` | Asymptotic Big-O string (e.g. `"O(1)"`, `"O(N)"`) | Auxiliary memory complexity |
+
