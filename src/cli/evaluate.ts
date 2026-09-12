@@ -89,6 +89,7 @@ export async function runEvaluate(
     const validCase = validation.data;
     console.log(`[Taro Evaluate] [${index + 1}/${rawData.length}] Processing case "${validCase.id}" (${validCase.company_url}, ${validCase.days} days)...`);
 
+    const caseStartTime = Date.now();
     try {
       const generatedKit = await generateKit({
         jd: validCase.jd,
@@ -100,6 +101,8 @@ export async function runEvaluate(
         },
       });
 
+      const caseDuration = ((Date.now() - caseStartTime) / 1000).toFixed(1);
+
       kits.push({
         id: validCase.id,
         status: 'ok',
@@ -107,9 +110,10 @@ export async function runEvaluate(
         error: null,
       });
 
-      console.log(`[Taro Evaluate] [${validCase.id}] Generation completed successfully.`);
+      console.log(`[Taro Evaluate] [${validCase.id}] Generation completed in ${caseDuration}s.`);
     } catch (err: any) {
-      console.error(`[Taro Evaluate] [${validCase.id}] Failed generation:`, err?.message || err);
+      const caseDuration = ((Date.now() - caseStartTime) / 1000).toFixed(1);
+      console.error(`[Taro Evaluate] [${validCase.id}] Failed generation after ${caseDuration}s:`, err?.message || err);
 
       const code =
         err instanceof TaroError && err.code ? err.code : ErrorCode.CASE_FAILED;
@@ -142,6 +146,16 @@ export async function runEvaluate(
   fs.mkdirSync(path.dirname(resolvedOutput), { recursive: true });
   fs.writeFileSync(resolvedOutput, JSON.stringify(outputPayload, null, 2), 'utf8');
 
+  console.log('\n[Taro Evaluate] ==================== BATCH SUMMARY ====================');
+  for (const k of kits) {
+    const statusLabel = k.status === 'ok' ? 'OK    ' : 'FAILED';
+    const detail =
+      k.status === 'ok'
+        ? `${k.kit?.questions?.length || 0} questions, ${k.kit?.schedule?.days_available || 0} days`
+        : `Error: ${k.error?.code}`;
+    console.log(`[Taro Evaluate] ${k.id.padEnd(15)} | ${statusLabel} | ${detail}`);
+  }
+  console.log('[Taro Evaluate] ========================================================');
   console.log(
     `[Taro Evaluate] Finished: ${kits.length} case(s) evaluated in ${elapsedSecs}s (${okCount} succeeded, ${failCount} failed) -> ${outputPath}`
   );

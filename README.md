@@ -16,7 +16,7 @@ taro/
 ├── docker-compose.yml         # Containerized MongoDB (27017) & Redis (6379) persistence
 ├── render.yaml                # Render backend deployment descriptor (Domain 9)
 ├── tsconfig.json              # TypeScript configuration with path aliases (@/shared, @/core, @/api, @/cli)
-├── vitest.config.ts           # Unified Vitest runner for all 369 unit & integration tests across 45 suites
+├── vitest.config.ts           # Unified Vitest runner for all 378 unit & integration tests across 45 suites
 ├── .env                       # Active runtime configuration
 ├── .env.example               # Committed environment variable contract
 ├── src/
@@ -334,10 +334,10 @@ If a requirement has 3 linked cards and the candidate only practices 1 card, rat
 
 ## Verification & Testing
 
-Recon maintains a 100% pass rate across **369 unit and integration tests** spanning 45 test files:
+Recon maintains a 100% pass rate across **378 unit and integration tests** spanning 45 test files:
 
 ```bash
-npm test              # Run all 369 tests hermetically (~3.5s)
+npm test              # Run all 378 tests hermetically (~3.5s)
 npm run test:shared   # Test Appendix A & B schemas, error registry, ID generators
 npm run test:core     # Test crawler, link ranker, SSRF shield, LLM pipeline, coverage math
 npm run test:api      # Test Express endpoints, Redis OTP, auth, kit lifecycle, mutations

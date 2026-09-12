@@ -251,3 +251,59 @@ export function calculateScheduleDailyAvgDifficulty(
     return totalDiff / d.question_ids.length;
   });
 }
+
+/**
+ * Deterministically moves a question from one scheduled day to another.
+ * Recalculates minutes and focus for affected days while preserving integer conservation.
+ */
+export function moveScheduledQuestion(
+  schedule: Schedule,
+  questions: Question[],
+  questionId: string,
+  targetDay: number
+): Schedule {
+  if (targetDay < 1 || targetDay > schedule.days_available) {
+    throw new Error(`Target day ${targetDay} is out of bounds (1..${schedule.days_available})`);
+  }
+
+  const qMap = new Map(questions.map((q) => [q.id, q]));
+  if (!qMap.has(questionId)) {
+    throw new Error(`Question ID "${questionId}" does not exist in question pool`);
+  }
+
+  // Create deep copy of days
+  const updatedDays = schedule.days.map((d) => ({
+    ...d,
+    question_ids: [...d.question_ids],
+  }));
+
+  // Remove questionId from any day it is currently assigned to
+  for (const day of updatedDays) {
+    day.question_ids = day.question_ids.filter((id) => id !== questionId);
+  }
+
+  // Insert into target day
+  const targetDayObj = updatedDays.find((d) => d.day === targetDay);
+  if (targetDayObj && !targetDayObj.question_ids.includes(questionId)) {
+    targetDayObj.question_ids.push(questionId);
+  }
+
+  // Recalculate minutes and focus themes for all days
+  for (const day of updatedDays) {
+    const dayQs = day.question_ids
+      .map((id) => qMap.get(id))
+      .filter((q): q is Question => Boolean(q));
+
+    day.minutes = calculateDailyMinutes(dayQs);
+    day.focus = determineDayFocus(dayQs, day.day === schedule.days_available, schedule.days_available);
+  }
+
+  const updatedSchedule: Schedule = {
+    days_available: schedule.days_available,
+    days: updatedDays,
+  };
+
+  ScheduleSchema.parse(updatedSchedule);
+  return updatedSchedule;
+}
+

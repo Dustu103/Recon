@@ -554,5 +554,5 @@ Root `README.md` must answer all 9 assessment-required topics:
 | **D7 Practice & Creative** | **COMPLETE** | 67 passed | 3D flip card deck, spaced repetition urgency queue, Weak-Spot Gap Radar, AI Mock Interview |
 | **D8 Evaluation CLI** | **COMPLETE** | 5 passed | `npm run evaluate`, Appendix B schema validation, localhost autograder, `--mock` flag |
 | **D9 Release** | **COMPLETE** | 4 passed | `render.yaml`, `vercel.json`, `/api/health`, video script, 9-topic architectural defense |
-| **TOTAL** | **100% COMPLETE** | **369 passed** | **45 test files passing, 0 failures** |
+| **TOTAL** | **100% COMPLETE** | **378 passed** | **45 test files passing, 0 failures** |
 

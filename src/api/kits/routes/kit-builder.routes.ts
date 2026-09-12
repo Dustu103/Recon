@@ -406,3 +406,51 @@ kitBuilderRouter.patch(
     }
   }
 );
+
+/**
+ * PATCH /api/kits/:id/schedule/move-question
+ * Moves a scheduled question to a different day and recomputes daily minutes.
+ */
+kitBuilderRouter.patch(
+  '/:id/schedule/move-question',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const kitId = req.params.id;
+      const userId = req.user!.id;
+      const { questionId, targetDay, expectedVersion } = req.body;
+
+      if (!questionId || typeof questionId !== 'string') {
+        throw new TaroError(ErrorCode.INVALID_INPUT, 'questionId string is required');
+      }
+      if (typeof targetDay !== 'number' || targetDay < 1) {
+        throw new TaroError(ErrorCode.INVALID_INPUT, 'targetDay positive integer is required');
+      }
+
+      const kit = await KitBuilderService.moveQuestionDay(
+        userId,
+        kitId,
+        questionId,
+        targetDay,
+        expectedVersion
+      );
+
+      res.status(200).json({
+        success: true,
+        schedule: kit.kit?.schedule,
+        version: kit.__v,
+      });
+    } catch (err: any) {
+      if (err instanceof TaroError) {
+        return res.status(getHttpStatusForErrorCode(err.code)).json({
+          success: false,
+          error: {
+            code: err.code,
+            message: err.message,
+          },
+        });
+      }
+      next(err);
+    }
+  }
+);
+

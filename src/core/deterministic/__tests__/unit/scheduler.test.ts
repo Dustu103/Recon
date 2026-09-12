@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   buildSchedule,
   calculateScheduleDailyAvgDifficulty,
+  moveScheduledQuestion,
 } from '../../scheduler';
 import { Question, Requirement, ScheduleSchema } from '@taro/shared';
 
@@ -174,4 +175,38 @@ describe('scheduler (Domain 4.3)', () => {
     expect(schedule.days[0].minutes).toBe(105);
     expect(Number.isInteger(schedule.days[0].minutes)).toBe(true);
   });
+
+  describe('moveScheduledQuestion', () => {
+    it('moves a question from Day 1 to Day 2 and recomputes minutes and focus correctly', () => {
+      const questions: Question[] = [
+        { id: 'q1', requirement_ids: ['r1'], category: 'system-design', prompt: 'Arch', answer_outline: 'a', difficulty: 3 }, // 60m
+        { id: 'q2', requirement_ids: ['r1'], category: 'technical', prompt: 'Coding', answer_outline: 'a', difficulty: 2 },     // 45m
+      ];
+
+      const initialSchedule = buildSchedule(questions, sampleReqs, 2);
+      expect(initialSchedule.days[0].question_ids).toContain('q1');
+      expect(initialSchedule.days[1].question_ids).toContain('q2');
+      expect(initialSchedule.days[0].minutes).toBe(60);
+      expect(initialSchedule.days[1].minutes).toBe(45);
+
+      // Move q1 to Day 2
+      const updatedSchedule = moveScheduledQuestion(initialSchedule, questions, 'q1', 2);
+      expect(updatedSchedule.days[0].question_ids).toEqual([]);
+      expect(updatedSchedule.days[0].minutes).toBe(0);
+      expect(updatedSchedule.days[1].question_ids).toEqual(['q2', 'q1']);
+      expect(updatedSchedule.days[1].minutes).toBe(105);
+      expect(() => ScheduleSchema.parse(updatedSchedule)).not.toThrow();
+    });
+
+    it('throws when targetDay is out of bounds or question does not exist', () => {
+      const questions: Question[] = [
+        { id: 'q1', requirement_ids: ['r1'], category: 'technical', prompt: 'Coding', answer_outline: 'a', difficulty: 1 },
+      ];
+      const schedule = buildSchedule(questions, sampleReqs, 2);
+
+      expect(() => moveScheduledQuestion(schedule, questions, 'q1', 3)).toThrow('Target day 3 is out of bounds');
+      expect(() => moveScheduledQuestion(schedule, questions, 'q999', 1)).toThrow('does not exist');
+    });
+  });
 });
+

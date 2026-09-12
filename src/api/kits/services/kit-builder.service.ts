@@ -23,7 +23,7 @@ import {
   regenerateFlashcards,
 } from '@/core';
 import { checkCoverage, buildCoverageEnvelope } from '@/core/deterministic/coverage-checker';
-import { buildSchedule } from '@/core/deterministic/scheduler';
+import { buildSchedule, moveScheduledQuestion } from '@/core/deterministic/scheduler';
 
 export interface ActiveRegeneration {
   kitId: string;
@@ -806,4 +806,40 @@ export class KitBuilderService {
 
     return updated.progress;
   }
+
+  /**
+   * Moves a question to a different day in the study schedule and recalculates day minutes.
+   */
+  static async moveQuestionDay(
+    userId: string,
+    kitId: string,
+    questionId: string,
+    targetDay: number,
+    expectedVersion?: number
+  ): Promise<IKit> {
+    const kit = await getUserKitById(kitId, userId);
+    if (!kit || !kit.kit) {
+      throw new TaroError(ErrorCode.KIT_NOT_FOUND, `Kit with ID "${kitId}" not found or has no content`);
+    }
+
+    if (expectedVersion !== undefined && kit.__v !== expectedVersion) {
+      throw new TaroError(
+        ErrorCode.CONCURRENT_MODIFICATION,
+        `Conflict: Kit version mismatch (current: ${kit.__v}, expected: ${expectedVersion})`
+      );
+    }
+
+    const updatedSchedule = moveScheduledQuestion(
+      kit.kit.schedule,
+      kit.kit.questions,
+      questionId,
+      targetDay
+    );
+
+    kit.kit.schedule = updatedSchedule;
+    kit.markModified('kit.schedule');
+    await kit.save();
+    return kit;
+  }
 }
+

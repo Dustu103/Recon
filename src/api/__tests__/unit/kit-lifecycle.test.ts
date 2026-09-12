@@ -4,7 +4,8 @@ import { connectTestDb, clearTestDb, closeTestDb } from '../setup/test-db';
 import { KitModel } from '../../kits/models/kit.model';
 import { KitLifecycleService, computeInputHash } from '../../kits/services/kit-lifecycle.service';
 import { reapStaleKits } from '../../kits/services/stale-reaper.service';
-import { TaroError, ErrorCode } from '@/shared';
+import { exportKitToMarkdown } from '../../kits/services/kit-export.service';
+import { TaroError, ErrorCode, Kit } from '@/shared';
 
 describe('D5 Kit Lifecycle, Hybrid Progress & Resilience Suite', () => {
   const user1Id = new mongoose.Types.ObjectId().toString();
@@ -222,4 +223,73 @@ describe('D5 Kit Lifecycle, Hybrid Progress & Resilience Suite', () => {
       expect(freshDoc!.status).toBe('generating');
     });
   });
+
+  describe('exportKitToMarkdown', () => {
+    it('formats a complete kit into structured Markdown with all 5 sections', () => {
+      const mockKit: Kit = {
+        source: {
+          company: 'Stripe',
+          company_url: 'https://stripe.com',
+          role: 'Backend Engineer',
+          location: 'San Francisco',
+          jd_chars: 1200,
+          researched_at: '2026-09-12T00:00:00Z',
+          pages_used: ['https://stripe.com/about'],
+        },
+        company_brief: {
+          summary: 'Financial infrastructure platform.',
+          what_they_do: 'Global online payments and billing.',
+          sources: ['https://stripe.com/about'],
+        },
+        role: {
+          title: 'Backend Engineer',
+          seniority: 'Senior',
+          responsibilities: ['Architect APIs', 'Ensure 99.999% uptime'],
+          requirements: [
+            { id: 'r1', text: 'Distributed systems experience', kind: 'technical', priority: 'must' },
+            { id: 'r2', text: 'Mentorship', kind: 'behavioural', priority: 'nice' },
+          ],
+        },
+        questions: [
+          {
+            id: 'q1',
+            prompt: 'Explain idempotency keys in payment APIs',
+            answer_outline: 'Unique request tokens stored in Redis with TTL',
+            category: 'technical',
+            difficulty: 3,
+            requirement_ids: ['r1'],
+          },
+        ],
+        flashcards: [
+          { id: 'f1', front: 'What is 2PC?', back: 'Two-phase commit protocol', requirement_ids: ['r1'] },
+        ],
+        schedule: {
+          days_available: 3,
+          days: [
+            { day: 1, focus: 'Technical Core', question_ids: ['q1'], minutes: 60 },
+            { day: 2, focus: 'Review', question_ids: [], minutes: 0 },
+            { day: 3, focus: 'Final Review', question_ids: [], minutes: 0 },
+          ],
+        },
+        coverage: {
+          uncovered_requirement_ids: [],
+          passes: 1,
+        },
+      };
+
+      const markdown = exportKitToMarkdown(mockKit, 'Custom Title');
+      expect(markdown).toContain('# Custom Title');
+      expect(markdown).toContain('## 1. Company Intelligence Brief');
+      expect(markdown).toContain('Financial infrastructure platform.');
+      expect(markdown).toContain('## 2. Job Description Requirements');
+      expect(markdown).toContain('**`r1`** **[MUST-HAVE]** (technical): Distributed systems experience');
+      expect(markdown).toContain('## 3. Targeted Question Bank');
+      expect(markdown).toContain('#### [q1] Explain idempotency keys in payment APIs');
+      expect(markdown).toContain('## 4. Rapid-Revision Flashcard Deck');
+      expect(markdown).toContain('### [f1] What is 2PC?');
+      expect(markdown).toContain('## 5. Day-by-Day Study Schedule');
+      expect(markdown).toContain('### Day 1: Technical Core (60 Minutes)');
+    });
+  });
 });
+

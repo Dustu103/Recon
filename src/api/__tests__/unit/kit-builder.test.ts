@@ -459,4 +459,24 @@ describe('Domain 6: Kit Builder & Workspace Mutations API Suite', () => {
       expect(res.body.progress.notes.q1).toBeUndefined();
     });
   });
+
+  describe('PATCH /api/kits/:id/schedule/move-question', () => {
+    it('moves a question across schedule days and recalculates daily minutes', async () => {
+      const doc = await seedKit(user1Id);
+
+      const res = await request(app)
+        .patch(`/api/kits/${doc._id}/schedule/move-question`)
+        .set('Cookie', user1Cookie)
+        .send({
+          questionId: 'q1',
+          targetDay: 2,
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.schedule.days[0].question_ids.includes('q1')).toBe(false);
+      expect(res.body.schedule.days[1].question_ids.includes('q1')).toBe(true);
+    });
+  });
 });
+

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { rankLinks, isInternalLink, isAssociatedCompanyLink, KEYWORD_WEIGHTS } from '../../link-ranker';
+import { rankLinks, rankSitemapUrls, isInternalLink, isAssociatedCompanyLink, KEYWORD_WEIGHTS } from '../../link-ranker';
 
 describe('link-ranker', () => {
   describe('isInternalLink', () => {
@@ -169,4 +169,37 @@ describe('link-ranker', () => {
       expect(isAssociatedCompanyLink('acme.com', 'fakeacme.com', 'https://fakeacme.com/careers', 'Careers')).toBe(false);
     });
   });
+
+  describe('rankSitemapUrls', () => {
+    it('returns empty array on empty inputs or malformed base URL', () => {
+      expect(rankSitemapUrls('', 'https://acme.com')).toEqual([]);
+      expect(rankSitemapUrls('<urlset></urlset>', '')).toEqual([]);
+      expect(rankSitemapUrls('<urlset></urlset>', 'invalid-url')).toEqual([]);
+    });
+
+    it('extracts and ranks internal URLs from sitemap XML by hiring/engineering score', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+        <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+          <url>
+            <loc>https://acme.com/careers</loc>
+          </url>
+          <url>
+            <loc>https://acme.com/engineering-handbook</loc>
+          </url>
+          <url>
+            <loc>https://acme.com/privacy-policy</loc>
+          </url>
+          <url>
+            <loc>https://malicious.org/careers</loc>
+          </url>
+        </urlset>`;
+
+      const results = rankSitemapUrls(xml, 'https://acme.com');
+      expect(results.length).toBe(2);
+      expect(results[0].url).toBe('https://acme.com/engineering-handbook'); // 17 pts (engineering 8 + handbook 9)
+      expect(results[1].url).toBe('https://acme.com/careers'); // 10 pts
+      expect(results.some((r) => r.url.includes('malicious.org'))).toBe(false);
+    });
+  });
 });
+

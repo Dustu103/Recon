@@ -10,6 +10,7 @@ import { TaroError, ErrorCode } from '@/shared';
 import { kitBuilderRouter } from './kit-builder.routes';
 import { kitPracticeRouter } from './kit-practice.routes';
 import { kitInterviewRouter } from './kit-interview.routes';
+import { exportKitToMarkdown } from '../services/kit-export.service';
 
 export const kitRouter = Router();
 
@@ -166,6 +167,36 @@ kitRouter.get('/', requireAuth, async (req: Request, res: Response, next: NextFu
       success: true,
       data: kits,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/kits/:id/export
+ * Exports the prep kit as clean Markdown study guide or JSON.
+ */
+kitRouter.get('/:id/export', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.id;
+    const { id } = req.params;
+    const format = req.query.format === 'json' ? 'json' : 'markdown';
+
+    const doc = await getUserKitById(id, userId);
+    if (!doc.kit) {
+      throw new TaroError(ErrorCode.KIT_NOT_FOUND, 'Kit has no generated content to export');
+    }
+
+    if (format === 'json') {
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="${doc.companyName || 'kit'}-prep-kit.json"`);
+      return res.status(200).send(JSON.stringify(doc.kit, null, 2));
+    }
+
+    const markdown = exportKitToMarkdown(doc.kit, doc.title);
+    res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${doc.companyName || 'kit'}-interview-prep.md"`);
+    return res.status(200).send(markdown);
   } catch (err) {
     next(err);
   }

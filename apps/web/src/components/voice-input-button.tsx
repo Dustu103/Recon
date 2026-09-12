@@ -102,7 +102,15 @@ export function VoiceInputButton({ onTranscript, disabled = false }: VoiceInputB
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
           </span>
-          <Mic className="w-5 h-5 text-red-400" />
+          <div className="flex items-center gap-1.5">
+            <Mic className="w-4 h-4 text-red-400" />
+            <div className="flex items-center gap-0.5 h-3.5 px-0.5" aria-label="Audio recording indicator">
+              <span className="w-0.5 h-2 bg-red-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+              <span className="w-0.5 h-3.5 bg-red-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+              <span className="w-0.5 h-2 bg-red-400 rounded-full animate-bounce"></span>
+              <span className="w-0.5 h-3 bg-red-400 rounded-full animate-bounce [animation-delay:-0.25s]"></span>
+            </div>
+          </div>
         </>
       ) : (
         <Mic className="w-5 h-5" />

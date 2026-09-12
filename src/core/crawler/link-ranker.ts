@@ -242,3 +242,74 @@ export function rankLinks(
   return candidates.slice(0, maxResults);
 }
 
+/**
+ * Extracts and scores relevant candidate URLs from raw XML sitemap text.
+ * Discovers careers, engineering, and culture paths when landing pages use client-side rendering.
+ */
+export function rankSitemapUrls(
+  xml: string,
+  baseUrl: string,
+  maxResults: number = 3
+): RankedLink[] {
+  if (!xml || !baseUrl) return [];
+
+  let parsedBase: URL;
+  try {
+    parsedBase = new URL(baseUrl);
+  } catch {
+    return [];
+  }
+
+  const locRegex = /<loc>\s*(https?:\/\/[^<\s]+)\s*<\/loc>/gi;
+  const seenUrls = new Set<string>();
+  const candidates: RankedLink[] = [];
+
+  let match: RegExpExecArray | null;
+  while ((match = locRegex.exec(xml)) !== null) {
+    const rawLoc = match[1].trim();
+    try {
+      const locUrl = new URL(rawLoc);
+      locUrl.hash = '';
+      const cleanUrl = locUrl.toString();
+
+      if (seenUrls.has(cleanUrl)) continue;
+      if (cleanUrl === parsedBase.origin || cleanUrl === `${parsedBase.origin}/`) continue;
+
+      if (!isInternalLink(parsedBase.hostname, locUrl.hostname)) continue;
+
+      seenUrls.add(cleanUrl);
+
+      const pathAndHost = `${locUrl.pathname.toLowerCase()} ${locUrl.hostname.toLowerCase()}`;
+      let score = 0;
+      const matchedKeywords: string[] = [];
+
+      for (const [keyword, weight] of Object.entries(KEYWORD_WEIGHTS)) {
+        if (pathAndHost.includes(keyword)) {
+          score += weight;
+          matchedKeywords.push(keyword);
+        }
+      }
+
+      if (score > 0) {
+        candidates.push({
+          url: cleanUrl,
+          score,
+          anchorText: 'Sitemap Entry',
+          matchedKeywords,
+        });
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  candidates.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    if (a.url.length !== b.url.length) return a.url.length - b.url.length;
+    return a.url.localeCompare(b.url);
+  });
+
+  return candidates.slice(0, maxResults);
+}
+
+

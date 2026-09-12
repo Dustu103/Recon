@@ -1,0 +1,35 @@
+name: Recon CI & Assessment Test Suite
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-and-build:
+    name: Unit Tests, Build & Appendix B Autograder
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Run Hermetic Unit & Integration Tests (Vitest)
+        run: npm test
+
+      - name: Verify Backend TypeScript Build
+        run: npm run build:api
+
+      - name: Execute Section 9 Evaluation CLI (Appendix B Mock Autograder)
+        run: npm run evaluate -- --input tests/cli/fixtures/test-cases.json --output tmp/ci-eval-output.json --mock
