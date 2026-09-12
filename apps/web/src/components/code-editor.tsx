@@ -13,7 +13,7 @@ interface CodeEditorProps {
   readOnly?: boolean;
 }
 
-const JS_STARTER = `/**
+export const JS_STARTER = `/**
  * @param {any} input
  * @return {any}
  */
@@ -23,7 +23,13 @@ function solution(input) {
 }
 `;
 
-const CPP_STARTER = `#include <iostream>
+export const PYTHON_STARTER = `class Solution:
+    def solve(self, *args, **kwargs):
+        # Write your Python 3 solution here
+        pass
+`;
+
+export const CPP_STARTER = `#include <iostream>
 #include <vector>
 #include <string>
 #include <unordered_map>
@@ -34,9 +40,63 @@ using namespace std;
 class Solution {
 public:
     // Write your C++ solution here
-    
+    void solve() {
+        
+    }
 };
 `;
+
+export const SQL_STARTER = `-- Write your SQL solution, Schema DDL, or Queries here
+
+-- Example Schema (PostgreSQL / ANSI SQL):
+CREATE TABLE IF NOT EXISTS products (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    category VARCHAR(100) NOT NULL,
+    price NUMERIC(10, 2) NOT NULL,
+    inventory_count INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Example Query / Aggregation:
+SELECT 
+    category,
+    COUNT(*) AS total_products,
+    ROUND(AVG(price), 2) AS avg_price,
+    SUM(inventory_count) AS total_inventory
+FROM products
+GROUP BY category
+ORDER BY total_inventory DESC;
+`;
+
+export function getStarterForLanguage(lang: InterviewLanguage): string {
+  switch (lang) {
+    case 'sql':
+      return SQL_STARTER;
+    case 'python':
+      return PYTHON_STARTER;
+    case 'cpp':
+      return CPP_STARTER;
+    case 'javascript':
+    default:
+      return JS_STARTER;
+  }
+}
+
+function isUntouchedStarter(text: string): boolean {
+  const trimmed = (text || '').trim();
+  return (
+    !trimmed ||
+    trimmed === JS_STARTER.trim() ||
+    trimmed === CPP_STARTER.trim() ||
+    trimmed === PYTHON_STARTER.trim() ||
+    trimmed === SQL_STARTER.trim() ||
+    trimmed.startsWith('#include <iostream>') ||
+    trimmed.startsWith('/**\n * @param {any} input') ||
+    trimmed.startsWith('-- Write your SQL') ||
+    trimmed.startsWith('class Solution:\n    def solve')
+  );
+}
 
 export function CodeEditor({
   language,
@@ -55,12 +115,26 @@ export function CodeEditor({
     [onCodeChange, onChange]
   );
 
-  // Set default starter code if empty
+  // Keep starter code in sync when empty or if switching languages with untouched default templates
   useEffect(() => {
-    if (!code || code.trim().length === 0) {
-      notifyChange(language === 'cpp' ? CPP_STARTER : JS_STARTER);
+    const trimmed = (code || '').trim();
+    if (!trimmed) {
+      notifyChange(getStarterForLanguage(language));
+    } else if (isUntouchedStarter(code)) {
+      const currentExpected = getStarterForLanguage(language).trim();
+      if (trimmed !== currentExpected) {
+        notifyChange(getStarterForLanguage(language));
+      }
     }
   }, [language, code, notifyChange]);
+
+  function handleSelectLanguage(newLang: InterviewLanguage) {
+    if (newLang === language) return;
+    onLanguageChange(newLang);
+    if (isUntouchedStarter(code)) {
+      notifyChange(getStarterForLanguage(newLang));
+    }
+  }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === 'Tab') {
@@ -85,7 +159,7 @@ export function CodeEditor({
   }
 
   function handleReset() {
-    notifyChange(language === 'cpp' ? CPP_STARTER : JS_STARTER);
+    notifyChange(getStarterForLanguage(language));
   }
 
   function handleClear() {
@@ -105,11 +179,11 @@ export function CodeEditor({
             <span>Interview Code Workspace</span>
           </div>
 
-          {/* Language Selector: JavaScript vs C++ */}
+          {/* Language Selector: JavaScript, Python, C++, SQL */}
           <div className="flex items-center bg-slate-900 p-0.5 rounded-lg border border-slate-800">
             <button
               type="button"
-              onClick={() => onLanguageChange('javascript')}
+              onClick={() => handleSelectLanguage('javascript')}
               className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${
                 language === 'javascript'
                   ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
@@ -120,7 +194,18 @@ export function CodeEditor({
             </button>
             <button
               type="button"
-              onClick={() => onLanguageChange('cpp')}
+              onClick={() => handleSelectLanguage('python')}
+              className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${
+                language === 'python'
+                  ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Python
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSelectLanguage('cpp')}
               className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${
                 language === 'cpp'
                   ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
@@ -128,6 +213,17 @@ export function CodeEditor({
               }`}
             >
               C++
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSelectLanguage('sql')}
+              className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${
+                language === 'sql'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              SQL
             </button>
           </div>
         </div>
@@ -197,7 +293,11 @@ export function CodeEditor({
           autoComplete="off"
           autoCorrect="off"
           placeholder={
-            language === 'cpp'
+            language === 'sql'
+              ? '-- Write PostgreSQL / MySQL / Schema DDL / Query here...'
+              : language === 'python'
+              ? '# Write modern Python 3 solution here...'
+              : language === 'cpp'
               ? '// Write modern C++ (C++17/20) solution here...'
               : '// Write modern JavaScript (ES6+) solution here...'
           }
@@ -208,7 +308,13 @@ export function CodeEditor({
       {/* Editor Footer */}
       <div className="flex items-center justify-between px-4 py-1.5 bg-slate-950/90 border-t border-slate-800/80 text-[10px] text-slate-500 font-mono">
         <div>
-          {language === 'cpp' ? 'C++ (Modern STL)' : 'JavaScript (Node.js)'} • UTF-8
+          {language === 'sql'
+            ? 'SQL (PostgreSQL / ANSI)'
+            : language === 'python'
+            ? 'Python 3.11+'
+            : language === 'cpp'
+            ? 'C++ (Modern STL)'
+            : 'JavaScript (Node.js)'} • UTF-8
         </div>
         <div>
           {lines.length} lines • {code.length} chars

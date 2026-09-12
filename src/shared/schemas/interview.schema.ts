@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const InterviewLanguageSchema = z.enum(['javascript', 'cpp']);
+export const InterviewLanguageSchema = z.enum(['javascript', 'cpp', 'python', 'sql']);
 export type InterviewLanguage = z.infer<typeof InterviewLanguageSchema>;
 
 export const InterviewCodeSnippetSchema = z.object({

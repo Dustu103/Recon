@@ -71,8 +71,27 @@ function buildCategoryPrompt(
 
   let specializedInstructions = '';
   if (category === 'technical') {
-    specializedInstructions = `Focus on practical coding scenarios, edge cases, distributed concurrency, debugging, and framework trade-offs.
-Provide a thorough 5-point evaluation answer outline with expected technical depth, trade-offs, and code concepts.`;
+    specializedInstructions = `Produce high-caliber, practical interview questions matching real industry standards:
+- FOR DATA STRUCTURES, ALGORITHMS & CODING (DSA / CP):
+  Format questions with LeetCode-style rigor! Each question prompt MUST include:
+  1. Detailed problem description specifying input types, output types, and desired behavior.
+  2. Concrete examples with:
+     Example 1:
+     Input: ...
+     Output: ...
+     Explanation: ...
+     Example 2:
+     Input: ...
+     Output: ...
+  3. Explicit "Constraints:" section detailing input ranges (e.g. 1 <= n <= 10^5) and expected time/space complexity limits.
+- FOR DATABASES, SQL & DATA MODELING:
+  Provide concrete schema contexts! Each question prompt MUST include:
+  1. Concrete relational or NoSQL schema specifications (table names, columns, data types, primary/foreign keys).
+  2. Concrete task requirements (e.g., write the PostgreSQL DDL, write the high-performance SQL aggregation query with indexes/window functions, or design the DynamoDB PK/SK access pattern).
+  3. Sample input records and expected query result set, or explicit consistency/indexing trade-offs.
+- FOR DISTRIBUTED SYSTEMS, APIS & BACKEND ARCHITECTURE:
+  Provide clear system parameters (QPS, throughput, latency SLAs, failure modes) and ask for specific architectural components, bottlenecks, and mitigations.
+In "answer_outline", provide a comprehensive 5-point rubric outlining the optimal approach, optimal time/space complexity, critical edge cases, and architectural trade-offs.`;
   } else if (category === 'behavioural') {
     specializedInstructions = `Focus on collaboration, leadership, conflict resolution, mentoring, and technical retrospectives.
 Instruct the candidate on how to structure their response using the STAR method (Situation, Task, Action, Result).`;

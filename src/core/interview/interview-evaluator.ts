@@ -58,7 +58,9 @@ ${currentTurnCandidate}
    - Specific to language:
      - If JavaScript: Evaluate clean ES6+ idioms, array/object manipulation, closures, and async patterns.
      - If C++: Evaluate modern C++ patterns (STL vectors/unordered_maps, pass-by-const-ref, memory safety, boundary constraints).
-   - State explicit Big-O time and space complexity.
+     - If Python: Evaluate Pythonic idioms, list comprehensions, generator memory efficiency, and time/space complexity.
+     - If SQL: Evaluate schema DDL/DML, normalization vs denormalization, indexing strategy (B-Tree/GIN), foreign key integrity, window functions/aggregation, query efficiency (EXPLAIN/cost), and transaction ACID guarantees.
+   - State explicit Big-O time and space complexity (or query performance cost and indexing efficiency for SQL).
    - Identify edge cases covered and remaining blind spots.
 3. **Behavioral / System Design Evaluation (if applicable)**:
    - If Behavioral: Check for STAR structure (Situation, Task, Action, Result) and specific impact metrics.

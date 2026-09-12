@@ -180,4 +180,73 @@ int lengthOfLongestSubstring(string s) {
     expect(report.codeReview).toBeDefined();
     expect(report.codeReview?.language).toBe('javascript');
   });
+
+  it('evaluates candidate turn with submitted SQL schema and query', async () => {
+    const mockClient = new LlmClient({ mock: true });
+
+    const sqlCode = `CREATE TABLE products (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  category VARCHAR(100) NOT NULL,
+  price NUMERIC(10, 2) NOT NULL
+);
+
+SELECT category, COUNT(*) AS count, AVG(price) AS avg_price
+FROM products
+GROUP BY category
+ORDER BY count DESC;`;
+
+    const result = await evaluateInterviewTurn(
+      {
+        questionId: 'q_code_sql',
+        questionPrompt: 'Design a schema for product catalog and write a category grouping query.',
+        category: 'technical',
+        userMessage: 'Here is my PostgreSQL schema DDL and aggregated query.',
+        codeSnippet: {
+          language: 'sql',
+          code: sqlCode,
+        },
+        conversationHistory: [],
+      },
+      mockClient
+    );
+
+    expect(result.interviewerReply).toBeDefined();
+    expect(result.feedback).toBeDefined();
+    expect(typeof result.feedback.score).toBe('number');
+  });
+
+  it('evaluates candidate turn with submitted Python code', async () => {
+    const mockClient = new LlmClient({ mock: true });
+
+    const pyCode = `class Solution:
+    def lengthOfLongestSubstring(self, s: str) -> int:
+        char_map = {}
+        left = max_len = 0
+        for right, char in enumerate(s):
+            if char in char_map and char_map[char] >= left:
+                left = char_map[char] + 1
+            char_map[char] = right
+            max_len = max(max_len, right - left + 1)
+        return max_len`;
+
+    const result = await evaluateInterviewTurn(
+      {
+        questionId: 'q_code_py',
+        questionPrompt: 'Find the length of the longest substring without repeating characters in Python.',
+        category: 'technical',
+        userMessage: 'Implemented sliding window with Python dictionary.',
+        codeSnippet: {
+          language: 'python',
+          code: pyCode,
+        },
+        conversationHistory: [],
+      },
+      mockClient
+    );
+
+    expect(result.interviewerReply).toBeDefined();
+    expect(result.feedback).toBeDefined();
+    expect(typeof result.feedback.score).toBe('number');
+  });
 });

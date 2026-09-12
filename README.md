@@ -49,7 +49,7 @@ Recon bridges the critical gap between passive interview preparation and active,
 - **Next.js 14 App Router (`apps/web/`)**: Delivers rich server rendering for initial dashboard loads combined with dynamic client components for interactive 3D study card flips, live countdown session timers, and Monaco code editing.
 - **MongoDB & Mongoose**: A document database is the natural fit for deeply nested interview prep kits containing variable numbers of requirements, multi-category questions, flashcards, dynamic daily study schedules, and practice session histories.
 - **Redis 7**: Provides ultra-fast ephemeral storage for timing-safe 2-step OTP verification (5-min TTL), single-use password reset tokens (15-min TTL), sliding-window rate limiters, and sub-millisecond progress caching to prevent database thrashing during generation polling.
-- **Vitest**: Runs 369 unit and integration tests across 45 test files in under 4 seconds with native ESM/TypeScript support and in-memory MongoDB mocking (`mongodb-memory-server`).
+- **Vitest**: Runs **380 automated tests across 45 test files** in under 4 seconds with native ESM/TypeScript support and in-memory MongoDB mocking (`mongodb-memory-server`).
 - **Zod**: Serves as the single source of truth for runtime validation across both the web server and the headless evaluation CLI runner.
 
 ---

@@ -9,7 +9,14 @@ import { kitsApi, KitDetail, ApiClientError } from '../../../../lib/api';
 import { kitBuilderApi } from '../../../../lib/kit-builder';
 import { practiceApi, PracticeAnalyticsResponse } from '../../../../lib/practice-api';
 import { interviewApi } from '../../../../lib/interview-api';
-import { CodeEditor } from '../../../../components/code-editor';
+import {
+  CodeEditor,
+  JS_STARTER,
+  PYTHON_STARTER,
+  CPP_STARTER,
+  SQL_STARTER,
+  getStarterForLanguage,
+} from '../../../../components/code-editor';
 import { VoiceInputButton } from '../../../../components/voice-input-button';
 import { VoiceSpeakerButton } from '../../../../components/voice-speaker-button';
 import {
@@ -144,7 +151,52 @@ function KitWorkspaceContent() {
   const [interviewMessages, setInterviewMessages] = useState<InterviewMessage[]>([]);
   const [interviewInputText, setInterviewInputText] = useState('');
   const [interviewLanguage, setInterviewLanguage] = useState<InterviewLanguage>('javascript');
-  const [interviewCode, setInterviewCode] = useState('');
+  const [interviewCode, setInterviewCode] = useState<string>(JS_STARTER);
+  const [codeSnippets, setCodeSnippets] = useState<Record<InterviewLanguage, string>>({
+    javascript: JS_STARTER,
+    python: PYTHON_STARTER,
+    cpp: CPP_STARTER,
+    sql: SQL_STARTER,
+  });
+
+  function getSuggestedLanguage(prompt?: string): InterviewLanguage {
+    if (!prompt) return 'javascript';
+    const lower = prompt.toLowerCase();
+    if (
+      /\b(sql|database|schema|query|queries|table|tables|postgres|postgresql|mysql|relational|nosql|dynamodb|mongodb|ddl|dml|indexing|foreign key)\b/i.test(
+        lower
+      )
+    ) {
+      return 'sql';
+    }
+    return 'javascript';
+  }
+
+  function handleInterviewCodeChange(newCode: string) {
+    setInterviewCode(newCode);
+    setCodeSnippets((prev) => ({
+      ...prev,
+      [interviewLanguage]: newCode,
+    }));
+  }
+
+  function handleInterviewLanguageChange(newLang: InterviewLanguage) {
+    if (newLang === interviewLanguage) return;
+    const currentCode = interviewCode;
+    setCodeSnippets((prev) => {
+      const updated = {
+        ...prev,
+        [interviewLanguage]: currentCode,
+      };
+      const nextCode =
+        updated[newLang] !== undefined
+          ? updated[newLang]
+          : getStarterForLanguage(newLang);
+      setInterviewCode(nextCode);
+      return updated;
+    });
+    setInterviewLanguage(newLang);
+  }
   const [attachCodeToTurn, setAttachCodeToTurn] = useState(true);
   const [isSendingTurn, setIsSendingTurn] = useState(false);
   const [latestFeedback, setLatestFeedback] = useState<InterviewFeedback | null>(null);
@@ -797,10 +849,16 @@ function KitWorkspaceContent() {
     if (questions && questions.length > 0 && !selectedInterviewQuestionId) {
       const firstQ = questions[0];
       setSelectedInterviewQuestionId(firstQ.id);
+      const suggestedLang = getSuggestedLanguage(firstQ.prompt);
+      if (suggestedLang !== 'javascript') {
+        setInterviewLanguage(suggestedLang);
+        setInterviewCode(getStarterForLanguage(suggestedLang));
+      }
+      const isSql = suggestedLang === 'sql';
       setInterviewMessages([
         {
           role: 'interviewer',
-          content: `Welcome to your AI Mock Interview! I will be evaluating your answer to: "${firstQ.prompt}". You can speak or write your answer, and use the code editor on the right for JavaScript or C++. Whenever you're ready, let me know your approach!`,
+          content: `Welcome to your AI Mock Interview! I will be evaluating your answer to: "${firstQ.prompt}". You can speak or write your answer, and use the code editor on the right for ${isSql ? 'SQL schema DDL and queries' : 'JavaScript, Python, C++, or SQL'}. Whenever you're ready, let me know your approach!`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         },
       ]);
@@ -811,10 +869,19 @@ function KitWorkspaceContent() {
     setSelectedInterviewQuestionId(qId);
     const targetQ = questions.find((q: any) => q.id === qId);
     if (targetQ) {
+      const suggestedLang = getSuggestedLanguage(targetQ.prompt);
+      if (suggestedLang !== interviewLanguage) {
+        handleInterviewLanguageChange(suggestedLang);
+      }
+      const isSql = suggestedLang === 'sql';
+      const promptInstruction = isSql
+        ? 'Speak or write your explanation, and use the code editor on the right for your SQL schema DDL or query implementation.'
+        : 'Speak or write your explanation, and use the code editor on the right for your code implementation (JavaScript, Python, C++, or SQL).';
+
       setInterviewMessages([
         {
           role: 'interviewer',
-          content: `Let's work on this ${targetQ.category} question: "${targetQ.prompt}". Speak or write your explanation, and use the code editor for any JavaScript or C++ implementation. How would you solve this?`,
+          content: `Let's work on this ${targetQ.category} question: "${targetQ.prompt}". ${promptInstruction} How would you solve this?`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         },
       ]);
@@ -907,7 +974,13 @@ function KitWorkspaceContent() {
     setSessionSeconds(0);
     setIsTimerRunning(false);
     setLatestFeedback(null);
-    setInterviewCode('');
+    setCodeSnippets({
+      javascript: JS_STARTER,
+      python: PYTHON_STARTER,
+      cpp: CPP_STARTER,
+      sql: SQL_STARTER,
+    });
+    setInterviewCode(getStarterForLanguage(interviewLanguage));
     if (selectedInterviewQuestion) {
       setInterviewMessages([
         {
@@ -2562,7 +2635,15 @@ function KitWorkspaceContent() {
                               <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 mb-1">
                                 <span className="flex items-center gap-1 text-emerald-400">
                                   <Code2 className="w-3 h-3" />
-                                  Attached {msg.codeSnippet.language === 'cpp' ? 'C++' : 'JavaScript'} snippet
+                                  Attached{' '}
+                                  {msg.codeSnippet.language === 'sql'
+                                    ? 'SQL'
+                                    : msg.codeSnippet.language === 'python'
+                                    ? 'Python'
+                                    : msg.codeSnippet.language === 'cpp'
+                                    ? 'C++'
+                                    : 'JavaScript'}{' '}
+                                  snippet
                                 </span>
                               </div>
                               <pre className="bg-slate-900 border border-slate-800 p-2.5 rounded-xl font-mono text-[11px] text-emerald-200 overflow-x-auto max-h-40">
@@ -2624,7 +2705,17 @@ function KitWorkspaceContent() {
                         onChange={(e) => setAttachCodeToTurn(e.target.checked)}
                         className="rounded border-slate-700 text-emerald-500 focus:ring-0 bg-slate-950 cursor-pointer"
                       />
-                      <span>Include current {interviewLanguage === 'cpp' ? 'C++' : 'JavaScript'} code with this turn</span>
+                      <span>
+                        Include current{' '}
+                        {interviewLanguage === 'sql'
+                          ? 'SQL'
+                          : interviewLanguage === 'python'
+                          ? 'Python'
+                          : interviewLanguage === 'cpp'
+                          ? 'C++'
+                          : 'JavaScript'}{' '}
+                        code with this turn
+                      </span>
                     </label>
                     <span className="text-[10px] text-slate-500">Press Enter or click Send</span>
                   </div>
@@ -2669,9 +2760,9 @@ function KitWorkspaceContent() {
               <div className="lg:col-span-5 h-[760px] flex flex-col">
                 <CodeEditor
                   code={interviewCode}
-                  onChange={setInterviewCode}
+                  onChange={handleInterviewCodeChange}
                   language={interviewLanguage}
-                  onLanguageChange={setInterviewLanguage}
+                  onLanguageChange={handleInterviewLanguageChange}
                 />
               </div>
             </div>

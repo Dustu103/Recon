@@ -20,30 +20,100 @@ export interface CuratedQuestionTemplate {
  * and behavioral leadership competencies.
  */
 export const CURATED_QUESTION_TEMPLATES: CuratedQuestionTemplate[] = [
-  // ── Data Structures & Algorithms ──────────────────────────────────────────
+  // ── Data Structures & Algorithms (LeetCode Style) ─────────────────────────
   {
     category: 'technical',
-    tags: ['dsa', 'data structures', 'algorithms', 'arrays', 'hash', 'strings', 'two pointer'],
-    prompt: 'How would you find the longest substring without repeating characters in O(n) time and O(min(m,n)) space?',
+    tags: ['dsa', 'data structures', 'algorithms', 'arrays', 'hash', 'strings', 'two pointer', 'sliding window'],
+    prompt: `Given a string s, find the length of the longest substring without repeating characters.
+
+Example 1:
+Input: s = "abcabcbb"
+Output: 3
+Explanation: The answer is "abc", with the length of 3.
+
+Example 2:
+Input: s = "bbbbb"
+Output: 1
+Explanation: The answer is "b", with the length of 1.
+
+Example 3:
+Input: s = "pwwkew"
+Output: 3
+Explanation: The answer is "wke", with the length of 3. Notice that "pwke" is a subsequence and not a substring.
+
+Constraints:
+- 0 <= s.length <= 5 * 10^4
+- s consists of English letters, digits, symbols and spaces.
+- Target: O(n) time complexity and O(min(m, n)) space complexity.`,
     answer_outline:
-      'Use a sliding window with a HashMap storing each character and its last seen index. Expand the right pointer; when a duplicate is encountered inside the current window, jump the left pointer past the previous occurrence.',
+      'Use a sliding window with a HashMap/Set storing each character and its last seen index. Expand the right pointer; when a duplicate is encountered inside the current window, advance the left pointer past the previous occurrence. Track and return the maximum window length.',
     evaluation_criteria: [
       'Correctly identifies sliding window technique with dynamic left/right pointers',
       'Explains O(n) time complexity and O(min(m,n)) character set space bounds',
-      'Handles edge cases (empty strings, all identical characters)',
+      'Handles edge cases (empty strings, all identical characters, single character)',
     ],
     difficulty: 2,
   },
   {
     category: 'technical',
-    tags: ['dsa', 'data structures', 'algorithms', 'trees', 'graphs', 'bfs', 'dfs'],
-    prompt: 'Compare Breadth-First Search (BFS) and Depth-First Search (DFS) in graph traversal. In which scenarios is BFS preferred?',
+    tags: ['dsa', 'data structures', 'algorithms', 'arrays', 'two sum', 'hashmap'],
+    prompt: `Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target. You may assume that each input would have exactly one solution, and you may not use the same element twice.
+
+Example 1:
+Input: nums = [2,7,11,15], target = 9
+Output: [0,1]
+Explanation: Because nums[0] + nums[1] == 9, we return [0, 1].
+
+Example 2:
+Input: nums = [3,2,4], target = 6
+Output: [1,2]
+
+Example 3:
+Input: nums = [3,3], target = 6
+Output: [0,1]
+
+Constraints:
+- 2 <= nums.length <= 10^4
+- -10^9 <= nums[i] <= 10^9
+- -10^9 <= target <= 10^9
+- Only one valid answer exists.
+- Target: O(n) time complexity using a single-pass hash map.`,
     answer_outline:
-      'BFS explores level-by-level using a queue, finding the shortest path in unweighted graphs. DFS explores deep along branches using a stack or recursion, ideal for topological sort, cycle detection, and maze solving.',
+      'Iterate through nums while maintaining a hash map of value to index. For each element, compute complement = target - nums[i]. If complement exists in map, return [map.get(complement), i]. Otherwise insert nums[i] into map.',
     evaluation_criteria: [
-      'Contrasts queue-based vs recursion/stack-based state management',
-      'Cites BFS shortest-path guarantee on unweighted edges',
-      'Explains memory consumption: BFS width vs DFS branch depth',
+      'Solves in O(n) time using single-pass hash map rather than O(n^2) brute force',
+      'Accurately handles duplicate values and negative integers',
+      'Analyzes O(n) auxiliary space complexity',
+    ],
+    difficulty: 1,
+  },
+  {
+    category: 'technical',
+    tags: ['dsa', 'data structures', 'algorithms', 'trees', 'graphs', 'bfs', 'dfs'],
+    prompt: `Given the root of a binary tree, return the level order traversal of its nodes' values (i.e., from left to right, level by level).
+
+Example 1:
+Input: root = [3,9,20,null,null,15,7]
+Output: [[3],[9,20],[15,7]]
+
+Example 2:
+Input: root = [1]
+Output: [[1]]
+
+Example 3:
+Input: root = []
+Output: []
+
+Constraints:
+- The number of nodes in the tree is in the range [0, 2000].
+- -1000 <= Node.val <= 1000
+- Compare BFS (Queue-based) vs DFS (Recursive with level depth tracking) approaches.`,
+    answer_outline:
+      'BFS explores level-by-level using a queue. For each level, record queue size, dequeue all nodes at that level, collect their values, and enqueue non-null children. Alternatively, DFS passes depth index and appends to corresponding sub-array.',
+    evaluation_criteria: [
+      'Contrasts queue-based iterative BFS vs recursive DFS state management',
+      'Explains O(N) time and O(W) max tree width space complexity',
+      'Handles empty root and skewed tree edge cases cleanly',
     ],
     difficulty: 2,
   },
@@ -119,7 +189,52 @@ export const CURATED_QUESTION_TEMPLATES: CuratedQuestionTemplate[] = [
     difficulty: 2,
   },
 
-  // ── Databases & Relational Storage ────────────────────────────────────────
+  // ── Databases, SQL & Data Modeling ───────────────────────────────────────
+  {
+    category: 'technical',
+    tags: ['database', 'sql', 'postgresql', 'nosql', 'dynamodb', 'schema', 'data modeling', 'inventory'],
+    prompt: `Compare relational (e.g., PostgreSQL) and NoSQL (e.g., DynamoDB) data models for storing an e-commerce product catalog that includes product details, categories, and inventory levels.
+
+Task Requirements:
+1. Write the concrete PostgreSQL schema DDL (CREATE TABLE statements with primary keys, foreign keys, and indexes) to support:
+   - products (id, name, description, category_id, price)
+   - categories (id, name, parent_category_id)
+   - inventory (product_id, warehouse_id, quantity, last_updated)
+2. Outline the DynamoDB Single-Table Design schema (Partition Key [PK], Sort Key [SK], and Global Secondary Index [GSI]) for the same entities.
+3. Discuss concrete trade-offs in consistency (ACID vs eventual consistency), complex query patterns (joins vs pre-computed denormalization), and write scaling under flash sales.`,
+    answer_outline:
+      '1. PostgreSQL DDL: Defines normalized tables products, categories, and inventory with foreign keys and composite indexes on (category_id, price) and (product_id, warehouse_id). Ensures strong ACID transactions during checkout.\\n2. DynamoDB Single-Table: Uses PK=PROD#<id>, SK=METADATA for products, PK=PROD#<id>, SK=INV#<warehouse_id> for inventory. GSI with PK=CAT#<id>, SK=PRICE#<val> to query category products without table scans.\\n3. Trade-offs: Postgres excels at relational integrity, flexible queries, and ACID inventory decrements, but requires read replicas or sharding at high write volume. DynamoDB scales horizontally with single-digit millisecond latency at arbitrary scale, but requires strict access pattern planning and distributed locking/transactions for cross-item operations.',
+    evaluation_criteria: [
+      'Provides concrete PostgreSQL DDL with proper data types, foreign keys, and indexes',
+      'Designs functional DynamoDB single-table schema with explicit PK, SK, and GSI access patterns',
+      'Compares ACID transactions vs eventual consistency and write throughput under load',
+    ],
+    difficulty: 3,
+  },
+  {
+    category: 'technical',
+    tags: ['sql', 'database', 'postgresql', 'window functions', 'queries', 'analytics', 'aggregation'],
+    prompt: `Given an e-commerce schema with tables:
+- products (id SERIAL PRIMARY KEY, name VARCHAR(255), category_id INT, price NUMERIC(10,2))
+- orders (id SERIAL PRIMARY KEY, customer_id INT, created_at TIMESTAMP)
+- order_items (id SERIAL PRIMARY KEY, order_id INT REFERENCES orders(id), product_id INT REFERENCES products(id), quantity INT, unit_price NUMERIC(10,2))
+
+Write a SQL query to find the top 2 highest revenue-generating products in each category over the past 90 days.
+
+Requirements:
+- Calculate total revenue as SUM(quantity * unit_price).
+- Use window functions (e.g. DENSE_RANK() or RANK()) partitioned by category_id ordered by total revenue descending.
+- Return: category_id, product_id, product_name, total_revenue, and category_revenue_rank.
+- Ensure ties are handled gracefully and results are filtered to rank <= 2.`,
+    answer_outline:
+      "Use a Common Table Expression (CTE) to join orders, order_items, and products with a WHERE filter on orders.created_at >= NOW() - INTERVAL '90 days'. Aggregate SUM(quantity * unit_price) grouped by category_id, product_id, product_name. Compute DENSE_RANK() OVER (PARTITION BY category_id ORDER BY SUM(quantity * unit_price) DESC) as rank. In outer query, filter WHERE rank <= 2 ORDER BY category_id, rank.",
+    evaluation_criteria: [
+      'Correctly joins products, orders, and order_items with proper time window filter',
+      'Uses CTE or subquery with DENSE_RANK() OVER (PARTITION BY category_id ORDER BY revenue DESC)',
+      'Filters outer query WHERE rank <= 2 and correctly computes revenue aggregation',
+    ],
+    difficulty: 2,
+  },
   {
     category: 'technical',
     tags: ['database', 'sql', 'postgresql', 'mysql', 'indexing', 'transactions', 'acid'],
