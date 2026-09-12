@@ -1,7 +1,20 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Terminal, Copy, Check, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
+import {
+  Terminal,
+  Copy,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Sparkles,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  Zap,
+  Cpu,
+} from 'lucide-react';
+import { InterviewFeedback } from '@taro/shared';
 
 export interface TestCaseExample {
   id: number;
@@ -116,20 +129,22 @@ export function parseQuestionPrompt(prompt: string): ParsedQuestionDetails {
 
 /**
  * Interactive Test Cases Panel (LeetCode Style)
- * Allows switching between Case 1, Case 2, etc. with Input / Expected Output.
+ * Displays Case 1, Case 2 with Input / Expected Output and real-time execution verdicts.
  */
 export function TestCasePanel({
   prompt,
   onCopyInput,
+  feedback,
 }: {
   prompt: string;
   onCopyInput?: (input: string) => void;
+  feedback?: InterviewFeedback | null;
 }) {
   const { examples, constraints } = parseQuestionPrompt(prompt);
   const [activeCaseIndex, setActiveCaseIndex] = useState(0);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-  if (examples.length === 0 && constraints.length === 0) {
+  if (examples.length === 0 && constraints.length === 0 && !feedback) {
     return null;
   }
 
@@ -142,34 +157,126 @@ export function TestCasePanel({
     if (onCopyInput) onCopyInput(text);
   }
 
+  const verdict =
+    feedback?.verdict ||
+    (typeof feedback?.score === 'number'
+      ? feedback.score >= 8
+        ? 'Accepted'
+        : feedback.score <= 4
+        ? 'Wrong Answer'
+        : 'Needs Revision'
+      : undefined);
+
+  const testCasesPassed =
+    feedback?.testCasesPassed ?? (verdict === 'Accepted' ? (examples.length || 2) : verdict === 'Wrong Answer' ? 0 : 1);
+  const totalTestCases = feedback?.totalTestCases ?? (examples.length || 2);
+
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 space-y-3 shadow-lg">
+      {/* Test Case Header & Verdict Banner */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Terminal className="w-4 h-4 text-emerald-400" />
-          <span className="text-xs font-bold text-slate-200">LeetCode Test Cases</span>
+          <span className="text-xs font-bold text-slate-200">Test Cases & Validation</span>
         </div>
 
         {/* Case Switcher Tabs */}
         {examples.length > 0 && (
           <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
-            {examples.map((ex, idx) => (
-              <button
-                key={ex.id || idx}
-                type="button"
-                onClick={() => setActiveCaseIndex(idx)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-mono font-semibold transition-all cursor-pointer ${
-                  activeCaseIndex === idx
-                    ? 'bg-emerald-500 text-slate-950 font-bold shadow'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                Case {ex.id || idx + 1}
-              </button>
-            ))}
+            {examples.map((ex, idx) => {
+              const isPassed = feedback ? idx < testCasesPassed : null;
+              return (
+                <button
+                  key={ex.id || idx}
+                  type="button"
+                  onClick={() => setActiveCaseIndex(idx)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-mono font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    activeCaseIndex === idx
+                      ? 'bg-emerald-500 text-slate-950 font-bold shadow'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <span>Case {ex.id || idx + 1}</span>
+                  {isPassed !== null && (
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        isPassed ? 'bg-emerald-400' : 'bg-rose-400'
+                      }`}
+                    />
+                  )}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
+
+      {/* LeetCode Real-Time Execution Verdict Card */}
+      {feedback && verdict && (
+        <div
+          className={`p-3 rounded-xl border text-xs space-y-2 transition-all duration-200 ${
+            verdict === 'Accepted'
+              ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
+              : verdict === 'Wrong Answer'
+              ? 'bg-rose-950/40 border-rose-500/40 text-rose-200'
+              : 'bg-amber-950/40 border-amber-500/40 text-amber-200'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {verdict === 'Accepted' ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              ) : verdict === 'Wrong Answer' ? (
+                <XCircle className="w-4 h-4 text-rose-400" />
+              ) : (
+                <AlertTriangle className="w-4 h-4 text-amber-400" />
+              )}
+              <span className="font-extrabold text-sm tracking-wide">{verdict}</span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span
+                className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-extrabold border ${
+                  verdict === 'Accepted'
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                    : verdict === 'Wrong Answer'
+                    ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                    : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                }`}
+              >
+                {testCasesPassed} / {totalTestCases} Test Cases Passed
+              </span>
+              {typeof feedback.score === 'number' && (
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-slate-950/60 text-slate-200 border border-slate-700/60">
+                  Score: {feedback.score}/10
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Complexity Badges */}
+          {feedback.codeAnalysis && (
+            <div className="flex flex-wrap items-center gap-2 pt-1 font-mono text-[10px]">
+              <span className="flex items-center gap-1 bg-slate-950/60 px-2 py-0.5 rounded border border-slate-800 text-slate-300">
+                <Zap className="w-3 h-3 text-amber-400" />
+                Time: <strong className="text-white">{feedback.codeAnalysis.timeComplexity || 'N/A'}</strong>
+              </span>
+              <span className="flex items-center gap-1 bg-slate-950/60 px-2 py-0.5 rounded border border-slate-800 text-slate-300">
+                <Cpu className="w-3 h-3 text-cyan-400" />
+                Space: <strong className="text-white">{feedback.codeAnalysis.spaceComplexity || 'N/A'}</strong>
+              </span>
+            </div>
+          )}
+
+          {/* Targeted Improvement Tips */}
+          {feedback.areasForImprovement && feedback.areasForImprovement.length > 0 && (
+            <div className="text-[11px] text-slate-300 bg-slate-950/40 p-2 rounded-lg border border-slate-800/60">
+              <span className="font-semibold text-amber-300">Test Evaluation Notes: </span>
+              {feedback.areasForImprovement.join(' • ')}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Active Case Details */}
       {activeExample && (

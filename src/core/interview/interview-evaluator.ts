@@ -71,6 +71,9 @@ ${currentTurnCandidate}
      "interviewerReply": "Conversational interviewer dialogue speaking directly to the candidate...",
      "feedback": {
        "score": 8, // Integer 1-10 rating of the candidate's current progress on this question
+       "verdict": "Accepted" | "Wrong Answer" | "Needs Revision", // LeetCode-style verdict
+       "testCasesPassed": 2, // Number of test cases / verification requirements passed
+       "totalTestCases": 2, // Total number of test cases / requirements evaluated
        "strengths": ["Clear communication", "Identified linear time approach"],
        "areasForImprovement": ["Did not account for empty inputs"],
        "codeAnalysis": {
@@ -93,15 +96,29 @@ Respond ONLY with valid JSON. Do not include markdown code block backticks outsi
 
     try {
       const parsedRaw = parseAndValidateJson<any>(response.content);
-      return InterviewTurnResponseSchema.parse(parsedRaw);
+      const validated = InterviewTurnResponseSchema.parse(parsedRaw);
+      if (!validated.feedback.verdict) {
+        const score = validated.feedback.score ?? 7;
+        validated.feedback.verdict = validated.feedback.isComplete || score >= 8
+          ? 'Accepted'
+          : score <= 4
+          ? 'Wrong Answer'
+          : 'Needs Revision';
+      }
+      return validated;
     } catch {
       try {
         const parsed = parseAndValidateJson<any>(response.content);
         if (parsed && typeof parsed === 'object' && parsed.interviewerReply) {
+          const score = typeof parsed.feedback?.score === 'number' ? parsed.feedback.score : 7;
+          const verdict = parsed.feedback?.verdict || (score >= 8 ? 'Accepted' : score <= 4 ? 'Wrong Answer' : 'Needs Revision');
           return {
             interviewerReply: String(parsed.interviewerReply),
             feedback: {
-              score: typeof parsed.feedback?.score === 'number' ? parsed.feedback.score : 7,
+              score,
+              verdict,
+              testCasesPassed: typeof parsed.feedback?.testCasesPassed === 'number' ? parsed.feedback.testCasesPassed : (verdict === 'Accepted' ? 2 : 1),
+              totalTestCases: typeof parsed.feedback?.totalTestCases === 'number' ? parsed.feedback.totalTestCases : 2,
               strengths: Array.isArray(parsed.feedback?.strengths) ? parsed.feedback.strengths : ['Good preliminary approach'],
               areasForImprovement: Array.isArray(parsed.feedback?.areasForImprovement) ? parsed.feedback.areasForImprovement : [],
               codeAnalysis: parsed.feedback?.codeAnalysis ? {
@@ -128,6 +145,9 @@ Respond ONLY with valid JSON. Do not include markdown code block backticks outsi
         interviewerReply: stripMarkdownFences(response.content).trim(),
         feedback: {
           score: 7,
+          verdict: 'Needs Revision',
+          testCasesPassed: 1,
+          totalTestCases: 2,
           strengths: ['Addressed the core interview question prompt directly'],
           areasForImprovement: ['Elaborate on edge cases and operational constraints'],
           codeAnalysis: codeSnippet ? {

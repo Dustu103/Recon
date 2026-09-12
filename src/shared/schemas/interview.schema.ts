@@ -32,6 +32,9 @@ export type InterviewTurnInput = z.infer<typeof InterviewTurnInputSchema>;
 
 export const InterviewFeedbackSchema = z.object({
   score: z.number().min(1).max(10).optional(),
+  verdict: z.enum(['Accepted', 'Wrong Answer', 'Needs Revision']).optional(),
+  testCasesPassed: z.number().optional(),
+  totalTestCases: z.number().optional(),
   strengths: z.array(z.string()).default([]),
   areasForImprovement: z.array(z.string()).default([]),
   codeAnalysis: z

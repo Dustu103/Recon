@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Code2, Copy, Check, RotateCcw, Trash2 } from 'lucide-react';
+import { Code2, Copy, Check, RotateCcw, Trash2, Play, Loader2 } from 'lucide-react';
 import { InterviewLanguage } from '@taro/shared';
 
 interface CodeEditorProps {
@@ -11,21 +11,17 @@ interface CodeEditorProps {
   onCodeChange?: (code: string) => void;
   onChange?: (code: string) => void;
   readOnly?: boolean;
+  onRun?: () => void;
+  isRunning?: boolean;
 }
 
-export const JS_STARTER = `/**
- * @param {any} input
- * @return {any}
- */
-function solution(input) {
-  // Write your JavaScript solution here
+export const JS_STARTER = `function solution() {
   
 }
 `;
 
 export const PYTHON_STARTER = `class Solution:
-    def solve(self, *args, **kwargs):
-        # Write your Python 3 solution here
+    def solve(self):
         pass
 `;
 
@@ -39,34 +35,14 @@ using namespace std;
 
 class Solution {
 public:
-    // Write your C++ solution here
     void solve() {
         
     }
 };
 `;
 
-export const SQL_STARTER = `-- Write your SQL solution, Schema DDL, or Queries here
+export const SQL_STARTER = `-- Write your SQL solution or schema DDL below
 
--- Example Schema (PostgreSQL / ANSI SQL):
-CREATE TABLE IF NOT EXISTS products (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    category VARCHAR(100) NOT NULL,
-    price NUMERIC(10, 2) NOT NULL,
-    inventory_count INT NOT NULL DEFAULT 0,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
--- Example Query / Aggregation:
-SELECT 
-    category,
-    COUNT(*) AS total_products,
-    ROUND(AVG(price), 2) AS avg_price,
-    SUM(inventory_count) AS total_inventory
-FROM products
-GROUP BY category
-ORDER BY total_inventory DESC;
 `;
 
 export function getStarterForLanguage(lang: InterviewLanguage): string {
@@ -92,9 +68,9 @@ function isUntouchedStarter(text: string): boolean {
     trimmed === PYTHON_STARTER.trim() ||
     trimmed === SQL_STARTER.trim() ||
     trimmed.startsWith('#include <iostream>') ||
-    trimmed.startsWith('/**\n * @param {any} input') ||
-    trimmed.startsWith('-- Write your SQL') ||
-    trimmed.startsWith('class Solution:\n    def solve')
+    trimmed.startsWith('function solution(') ||
+    trimmed.startsWith('class Solution:') ||
+    trimmed.startsWith('-- Write your SQL')
   );
 }
 
@@ -105,6 +81,8 @@ export function CodeEditor({
   onCodeChange,
   onChange,
   readOnly = false,
+  onRun,
+  isRunning = false,
 }: CodeEditorProps) {
   const [copied, setCopied] = useState(false);
   const notifyChange = React.useCallback(
@@ -230,6 +208,28 @@ export function CodeEditor({
 
         {/* Toolbar Actions */}
         <div className="flex items-center gap-2">
+          {onRun && (
+            <button
+              type="button"
+              onClick={onRun}
+              disabled={isRunning || !code.trim()}
+              className="px-3 py-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold rounded-lg transition-all flex items-center gap-1.5 text-xs disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-sm shadow-emerald-500/20 mr-1"
+              title="Run and evaluate code against test cases"
+            >
+              {isRunning ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Checking...</span>
+                </>
+              ) : (
+                <>
+                  <Play className="w-3.5 h-3.5 fill-slate-950" />
+                  <span>Run & Check</span>
+                </>
+              )}
+            </button>
+          )}
+
           <button
             type="button"
             onClick={handleCopy}

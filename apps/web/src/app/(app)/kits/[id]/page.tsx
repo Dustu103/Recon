@@ -945,6 +945,74 @@ function KitWorkspaceContent() {
     }
   }
 
+  async function handleRunCodeCheck() {
+    const code = interviewCode.trim();
+    if (!code) {
+      setActionNotice('Please write some code before running tests.');
+      setTimeout(() => setActionNotice(null), 2500);
+      return;
+    }
+
+    const currentQ = selectedInterviewQuestion || questions[0];
+    if (!currentQ) return;
+
+    const userMsg: InterviewMessage = {
+      role: 'candidate',
+      content: interviewInputText.trim()
+        ? interviewInputText.trim()
+        : `[Ran and submitted ${interviewLanguage.toUpperCase()} solution for test case validation]`,
+      codeSnippet: { language: interviewLanguage, code: interviewCode },
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
+
+    const nextHistory = [...interviewMessages, userMsg];
+    setInterviewMessages(nextHistory);
+    setInterviewInputText('');
+    setIsSendingTurn(true);
+
+    if (!isTimerRunning) {
+      setIsTimerRunning(true);
+    }
+
+    try {
+      const response = await interviewApi.sendTurn(kitId, {
+        questionId: currentQ.id,
+        questionPrompt: currentQ.prompt,
+        category: currentQ.category || 'technical',
+        userMessage: userMsg.content,
+        codeSnippet: { language: interviewLanguage, code: interviewCode },
+        conversationHistory: nextHistory,
+      });
+
+      setInterviewMessages((prev) => [
+        ...prev,
+        {
+          role: 'interviewer',
+          content: response.interviewerReply,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        },
+      ]);
+      setLatestFeedback(response.feedback);
+      const verdict =
+        response.feedback.verdict ||
+        (response.feedback.score && response.feedback.score >= 8 ? 'Accepted' : 'Needs Revision');
+      setActionNotice(
+        verdict === 'Accepted'
+          ? 'Passed! Solution Accepted.'
+          : verdict === 'Wrong Answer'
+          ? 'Wrong Answer: Check test cases and edge cases.'
+          : 'Evaluation complete: Solution needs revisions.'
+      );
+      setTimeout(() => setActionNotice(null), 4000);
+    } catch (err: any) {
+      console.error('Failed to run code evaluation:', err);
+      setActionNotice('Failed to evaluate code: ' + (err.message || 'Unknown error'));
+      setTimeout(() => setActionNotice(null), 3000);
+    } finally {
+      setIsSendingTurn(false);
+    }
+  }
+
   async function handleGenerateSessionReport() {
     const currentQ = selectedInterviewQuestion || questions[0];
     if (!currentQ) return;
@@ -2709,7 +2777,7 @@ function KitWorkspaceContent() {
                           Real-time Turn Rubric
                         </span>
                         <span className="text-xs font-mono font-extrabold bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-md border border-emerald-500/30">
-                          Score: {latestFeedback.score}/100
+                          {latestFeedback.verdict ? `${latestFeedback.verdict} • ` : ''}Score: {latestFeedback.score}/10
                         </span>
                       </div>
                       {latestFeedback.strengths.length > 0 && (
@@ -2803,7 +2871,10 @@ function KitWorkspaceContent() {
               {/* Right Column: Code Workspace & Interactive Test Cases */}
               <div className="lg:col-span-5 flex flex-col space-y-3">
                 {selectedInterviewQuestion && (
-                  <TestCasePanel prompt={selectedInterviewQuestion.prompt} />
+                  <TestCasePanel
+                    prompt={selectedInterviewQuestion.prompt}
+                    feedback={latestFeedback}
+                  />
                 )}
 
                 <div className="h-[520px] flex flex-col">
@@ -2812,6 +2883,8 @@ function KitWorkspaceContent() {
                     onChange={handleInterviewCodeChange}
                     language={interviewLanguage}
                     onLanguageChange={handleInterviewLanguageChange}
+                    onRun={handleRunCodeCheck}
+                    isRunning={isSendingTurn}
                   />
                 </div>
               </div>
