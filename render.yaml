@@ -3,7 +3,7 @@ services:
     name: recon-api
     env: node
     plan: free
-    buildCommand: npm install && npm run build:api
+    buildCommand: npm install --include=dev && npm run build:api
     startCommand: node dist/src/api/index.js
     healthCheckPath: /api/health
     envVars:

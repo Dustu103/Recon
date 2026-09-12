@@ -12,7 +12,8 @@ export async function connectDatabase(uri?: string): Promise<typeof mongoose> {
   let mongoUri = uri || process.env.MONGODB_URI;
 
   if (!mongoUri && process.env.NODE_ENV !== 'production') {
-    const { MongoMemoryServer } = await import('mongodb-memory-server');
+    const pkg = 'mongodb-memory-server';
+    const { MongoMemoryServer } = await (import(pkg) as Promise<any>);
     const mongod = await MongoMemoryServer.create();
     mongoUri = mongod.getUri();
     process.env.MONGODB_URI = mongoUri;
@@ -33,7 +34,8 @@ export async function connectDatabase(uri?: string): Promise<typeof mongoose> {
       console.warn(
         `[Database] Connection to ${mongoUri} failed (${err.message}). Starting in-memory MongoDB server for local dev...`
       );
-      const { MongoMemoryServer } = await import('mongodb-memory-server');
+      const pkg = 'mongodb-memory-server';
+      const { MongoMemoryServer } = await (import(pkg) as Promise<any>);
       const mongod = await MongoMemoryServer.create();
       const inMemoryUri = mongod.getUri();
       process.env.MONGODB_URI = inMemoryUri;
