@@ -10,6 +10,9 @@ export async function connectDatabase(uri?: string): Promise<typeof mongoose> {
   }
 
   let mongoUri = uri || process.env.MONGODB_URI;
+  if (mongoUri) {
+    mongoUri = mongoUri.trim().replace(/^["']|["']$/g, '');
+  }
 
   if (!mongoUri && process.env.NODE_ENV !== 'production') {
     const pkg = 'mongodb-memory-server';
@@ -27,7 +30,7 @@ export async function connectDatabase(uri?: string): Promise<typeof mongoose> {
   try {
     return await mongoose.connect(mongoUri, {
       maxPoolSize: 10,
-      serverSelectionTimeoutMS: 2000,
+      serverSelectionTimeoutMS: 15000,
     });
   } catch (err: any) {
     if (process.env.NODE_ENV !== 'production') {
