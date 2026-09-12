@@ -252,4 +252,18 @@ To replicate an authentic one-to-one interview screen with a Staff Software Engi
    - Displays real-time interim speech-to-text as the candidate speaks.
    - Simultaneously keeps the code editor and test case runner active, allowing candidates to explain their architecture aloud while coding or running test cases.
 
+### 6.8 Architectural Decision: Voice-First for Theory & Real-Time Clarification Engine (ADR-006)
+As formalized in [ADR 006](file:///d:/Prorgram/Project/taro/docs/architecture/decisions/006-d7-voice-interview-interaction-model.md), the system applies explicit modality pairing:
+
+1. **Why Theory / Conceptual Questions Use Voice-First**:
+   - Conceptual topics (e.g., *"What is Node.js and how does non-blocking I/O work?"*, *"Explain PostgreSQL MVCC"*, *"Compare optimistic vs pessimistic locking"*) require comprehensive, structural explanations.
+   - **Time Savings**: Typing speed is ~40 WPM (~6 minutes per question), whereas natural speech is ~150 WPM (~1.7 minutes per question). By utilizing voice mode, candidates save **~73% of study time** per conceptual question, eliminating typing fatigue while reinforcing real-world verbal fluency.
+   - **Realistic Phone & Video Screen Rehearsal**: Live technical screens evaluate spoken clarity, vocal confidence, and structured STAR delivery rather than typing mechanics.
+
+2. **Interactive Clarification & Ambiguity Resolution**:
+   - In real interviews, candidates are encouraged to ask clarifying questions before answering.
+   - If a candidate does not understand a question or needs hints, they can **speak directly to the interviewer** (e.g., *"Could you clarify what kind of workload scale we expect?"* or *"Could you explain what Node.js does under the hood in this context?"*).
+   - The AI interviewer answers adaptively, clarifying constraints, defining terms, and offering guidance without penalizing the candidate's score. Proactive clarification is scored positively as a senior engineering practice.
+
+
 
