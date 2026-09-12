@@ -5,7 +5,7 @@ import {
   InterviewReport,
 } from '@taro/shared';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
 
 class InterviewApiClient {
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
