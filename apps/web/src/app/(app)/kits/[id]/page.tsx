@@ -19,6 +19,7 @@ import {
 } from '../../../../components/code-editor';
 import { VoiceInputButton } from '../../../../components/voice-input-button';
 import { VoiceSpeakerButton } from '../../../../components/voice-speaker-button';
+import { LeetCodeProblemCard, TestCasePanel } from '../../../../components/leetcode-testcases';
 import {
   QuestionCategory,
   InterviewLanguage,
@@ -200,6 +201,7 @@ function KitWorkspaceContent() {
   const [attachCodeToTurn, setAttachCodeToTurn] = useState(true);
   const [isSendingTurn, setIsSendingTurn] = useState(false);
   const [latestFeedback, setLatestFeedback] = useState<InterviewFeedback | null>(null);
+  const [showInterviewProblemCard, setShowInterviewProblemCard] = useState(true);
 
   // Session Timer state
   const [sessionSeconds, setSessionSeconds] = useState(0);
@@ -1666,7 +1668,9 @@ function KitWorkspaceContent() {
                         </div>
 
                         {!isEditing ? (
-                          <h4 className="text-base font-semibold text-white pt-1">{q.prompt}</h4>
+                          <div className="pt-1">
+                            <LeetCodeProblemCard prompt={q.prompt} />
+                          </div>
                         ) : null}
                       </div>
 
@@ -2567,6 +2571,46 @@ function KitWorkspaceContent() {
               </div>
             </div>
 
+            {/* Target Question LeetCode Problem Card */}
+            {selectedInterviewQuestion && (
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2 shadow-xl">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded bg-slate-950 text-emerald-400 font-mono text-xs font-bold border border-slate-800">
+                      {selectedInterviewQuestion.id}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                      {selectedInterviewQuestion.category}
+                    </span>
+                    <span className="text-xs font-bold text-white">Problem Statement & Examples</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowInterviewProblemCard(!showInterviewProblemCard)}
+                    className="text-xs text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer"
+                  >
+                    {showInterviewProblemCard ? (
+                      <>
+                        <span>Collapse</span>
+                        <ChevronUp className="w-3.5 h-3.5" />
+                      </>
+                    ) : (
+                      <>
+                        <span>Expand Problem & Examples</span>
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {showInterviewProblemCard && (
+                  <div className="pt-2 border-t border-slate-800/80">
+                    <LeetCodeProblemCard prompt={selectedInterviewQuestion.prompt} />
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Main Interactive Split-Pane */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               {/* Left Column: Conversational AI Interviewer & Voice Input */}
@@ -2756,14 +2800,20 @@ function KitWorkspaceContent() {
                 </div>
               </div>
 
-              {/* Right Column: Code Editor (C++ & JavaScript) */}
-              <div className="lg:col-span-5 h-[760px] flex flex-col">
-                <CodeEditor
-                  code={interviewCode}
-                  onChange={handleInterviewCodeChange}
-                  language={interviewLanguage}
-                  onLanguageChange={handleInterviewLanguageChange}
-                />
+              {/* Right Column: Code Workspace & Interactive Test Cases */}
+              <div className="lg:col-span-5 flex flex-col space-y-3">
+                {selectedInterviewQuestion && (
+                  <TestCasePanel prompt={selectedInterviewQuestion.prompt} />
+                )}
+
+                <div className="h-[520px] flex flex-col">
+                  <CodeEditor
+                    code={interviewCode}
+                    onChange={handleInterviewCodeChange}
+                    language={interviewLanguage}
+                    onLanguageChange={handleInterviewLanguageChange}
+                  />
+                </div>
               </div>
             </div>
           </div>
