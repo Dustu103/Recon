@@ -10,8 +10,9 @@
     "dev:api": "tsx watch src/api/index.ts",
     "build": "npm run build:api",
     "build:all": "npm run build:api && npm run build:web",
-    "build:api": "tsc -p tsconfig.json",
+    "build:api": "tsc -p tsconfig.json && tsc-alias -p tsconfig.json",
     "build:web": "npm run --workspace=apps/web build",
+    "start": "node dist/api/index.js",
     "lint": "npm run lint --workspace=apps/web",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -43,6 +44,7 @@
     "jsonwebtoken": "^9.0.2",
     "minimist": "^1.2.8",
     "mongoose": "^8.5.4",
+    "tsc-alias": "^1.9.5",
     "typescript": "^5.5.4",
     "undici": "^6.19.7",
     "zod": "^3.23.8"
