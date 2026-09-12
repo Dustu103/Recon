@@ -11,7 +11,7 @@
 export { ErrorCode, TaroError } from './errors';
 export type { ErrorCode as ErrorCodeType } from './errors';
 
-export { genReqIds, genQIds, genFIds, genNextIds, nextOffsetFromIds } from './id-generator';
+export { genReqIds, genQIds, genFIds, genNextIds, nextOffsetFromIds, computeKitNextIndices } from './id-generator';
 
 // Environment validation & loading
 export {

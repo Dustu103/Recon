@@ -24,6 +24,7 @@ export const KitSchema = z
     flashcards: z.array(FlashcardSchema),
     schedule: ScheduleSchema,
     coverage: CoverageSchema,
+    schema_version: z.string().optional(),
   })
   .superRefine((data, ctx) => {
     // 0. Enforce unique IDs within the kit

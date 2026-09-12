@@ -63,3 +63,24 @@ export function genQIds(count: number, offset = 0): string[] {
 export function genFIds(count: number, offset = 0): string[] {
   return makeIds('f', count, offset);
 }
+
+/**
+ * Computes safe next continuation indices (nextRequirementIndex, nextQuestionIndex, nextFlashcardIndex)
+ * by inspecting existing IDs in an imported or loaded kit.
+ * Protects against ID collision or reset after deletions.
+ */
+export function computeKitNextIndices(kit: {
+  role?: { requirements?: Array<{ id: string }> };
+  questions?: Array<{ id: string }>;
+  flashcards?: Array<{ id: string }>;
+}): { nextRequirementIndex: number; nextQuestionIndex: number; nextFlashcardIndex: number } {
+  const reqIds = (kit.role?.requirements || []).map((r) => r.id);
+  const qIds = (kit.questions || []).map((q) => q.id);
+  const fIds = (kit.flashcards || []).map((f) => f.id);
+
+  return {
+    nextRequirementIndex: nextOffsetFromIds('r', reqIds) + 1,
+    nextQuestionIndex: nextOffsetFromIds('q', qIds) + 1,
+    nextFlashcardIndex: nextOffsetFromIds('f', fIds) + 1,
+  };
+}

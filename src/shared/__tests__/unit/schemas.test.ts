@@ -405,6 +405,11 @@ describe('KitSchema', () => {
     expect(() => KitSchema.parse(validKit)).not.toThrow();
   });
 
+  it('accepts kit with explicit schema_version', () => {
+    const kitWithVersion = { ...validKit, schema_version: '1.0' };
+    expect(() => KitSchema.parse(kitWithVersion)).not.toThrow();
+  });
+
   it('rejects kit with missing source.company', () => {
     const bad = { ...validKit, source: { ...validKit.source, company: '' } };
     const result = KitSchema.safeParse(bad);

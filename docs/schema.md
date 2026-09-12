@@ -94,6 +94,7 @@ Every interview prep kit produced by Taro must conform strictly to the Appendix 
 | `schedule.days[].minutes` | `number` | Integer only (non-negative) | Float durations fail |
 | `schedule.days_available` | `number` | Integer 1 to 60 | Must match `schedule.days.length` |
 | `coverage.passes` | `number` | Integer >= 1 | Number of loop passes |
+| `schema_version` | `string` (optional) | Format `"1.0"` | Schema versioning for database migrations |
 
 ---
 
@@ -116,6 +117,13 @@ export interface IKitProgress {
 | `nextFlashcardIndex`| `number` | `1` | Monotonic counter for allocating non-colliding `fX` IDs across manual additions and regenerations. |
 | `progress` | `IKitProgress` | `{ notes: {}, starred: [], flashcardMastery: {}, completedDays: [] }` | Workspace candidate progress state updated via `PATCH /api/kits/:id/candidate-progress`. |
 | `__v` | `number` | `0` | Mongoose OCC version key evaluated on mutations to prevent race conditions. |
+
+### Monotonic Continuation Helper: `computeKitNextIndices`
+To safely initialize or restore monotonic counters from any loaded kit (e.g. after user deletions or when importing external JSON files), `@taro/shared` exports:
+```typescript
+const { nextRequirementIndex, nextQuestionIndex, nextFlashcardIndex } = computeKitNextIndices(kit);
+```
+This inspects existing `rX`, `qX`, and `fX` IDs and returns `max(numeric_suffix) + 1`, guaranteeing non-colliding ID generation even if earlier items were deleted.
 
 ---
 

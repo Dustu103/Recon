@@ -2,7 +2,7 @@
  * D0.4 — Stable ID Generator Unit Tests
  */
 import { describe, it, expect } from 'vitest';
-import { genReqIds, genQIds, genFIds, genNextIds, nextOffsetFromIds } from '../../id-generator';
+import { genReqIds, genQIds, genFIds, genNextIds, nextOffsetFromIds, computeKitNextIndices } from '../../id-generator';
 
 describe('genReqIds', () => {
   it('generates sequential requirement IDs from 1', () => {
@@ -62,3 +62,32 @@ describe('genNextIds & nextOffsetFromIds (Deletion resilience)', () => {
     expect(genNextIds('r', existing, 1)).toEqual(['r13']);
   });
 });
+
+describe('computeKitNextIndices', () => {
+  it('computes safe continuation indices from populated kit collections', () => {
+    const kit = {
+      role: {
+        requirements: [{ id: 'r1' }, { id: 'r2' }, { id: 'r5' }], // r3, r4 removed
+      },
+      questions: [{ id: 'q1' }, { id: 'q3' }, { id: 'q7' }],
+      flashcards: [{ id: 'f1' }, { id: 'f2' }],
+    };
+
+    const indices = computeKitNextIndices(kit);
+    expect(indices).toEqual({
+      nextRequirementIndex: 6,
+      nextQuestionIndex: 8,
+      nextFlashcardIndex: 3,
+    });
+  });
+
+  it('handles empty collections safely with base index 1', () => {
+    const indices = computeKitNextIndices({});
+    expect(indices).toEqual({
+      nextRequirementIndex: 1,
+      nextQuestionIndex: 1,
+      nextFlashcardIndex: 1,
+    });
+  });
+});
+
